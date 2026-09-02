@@ -28,6 +28,9 @@ export async function apiGet(path) {
 export const searchCatalog = (q) => apiGet(`/api/search?q=${encodeURIComponent(q)}`);
 export const browseHome = () => apiGet("/api/browse");
 export const loadCollection = (url) => apiGet(`/api/collection?url=${encodeURIComponent(url)}`);
+export const loadGenres = () => apiGet("/api/genres");
+export const loadGenre = (id) => apiGet(`/api/genre?id=${encodeURIComponent(id)}`);
+export const loadGenreMeta = (id) => apiGet(`/api/genre-meta?id=${encodeURIComponent(id)}`);
 
 export async function fetchLyrics(track) {
   const p = new URLSearchParams({

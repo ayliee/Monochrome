@@ -5,24 +5,28 @@ import {
   fetchLyrics,
   formatTime,
   loadCollection,
+  loadGenre,
+  loadGenreMeta,
   parseLrc,
   prefetch,
   searchCatalog,
   streamUrl,
   trackKey,
 } from "./api.js";
+import { GENRES } from "./genres.js";
 import {
   BackIcon,
+  BrowseIcon,
   ClockIcon,
   CloseIcon,
   GearIcon,
   HeartIcon,
   HomeIcon,
   LibraryIcon,
-  MicIcon,
   MoreIcon,
   NextIcon,
   PauseIcon,
+  MicIcon,
   PlayIcon,
   PrevIcon,
   QueueIcon,
@@ -57,6 +61,29 @@ function NavButton({ id, current, onClick, children, label }) {
     <button className={`nav-btn ${current === id ? "active" : ""}`} onClick={() => onClick(id)} title={label} aria-label={label}>
       {children}
     </button>
+  );
+}
+
+function SeekBar({ value, max, onChange, wide }) {
+  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
+  return (
+    <div className="seek" style={wide ? { width: "100%", maxWidth: "none" } : undefined}>
+      <span>{formatTime(value)}</span>
+      <div className="seek-wrap">
+        <div className="seek-track">
+          <div className="seek-fill" style={{ width: `${pct}%` }} />
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={max || 0}
+          step={0.1}
+          value={Math.min(value, max || 0)}
+          onChange={(e) => onChange(Number(e.target.value))}
+        />
+      </div>
+      <span>{formatTime(max)}</span>
+    </div>
   );
 }
 
@@ -95,6 +122,12 @@ export default function App() {
   const [ctxMenu, setCtxMenu] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem(LS_THEME) || "monochrome");
   const [buffering, setBuffering] = useState(false);
+  const [genres, setGenres] = useState([]);
+  const [genresLoading, setGenresLoading] = useState(false);
+  const [genrePage, setGenrePage] = useState(null);
+  const [genreLoading, setGenreLoading] = useState(false);
+  const streamRetry = useRef(0);
+  const genreProbe = useRef(0);
 
   const current = index >= 0 ? queue[index] : null;
 
@@ -121,6 +154,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (view === "browse" || view === "genre") return undefined;
     const t = setTimeout(() => {
       const q = query.trim();
       if (!q) {
@@ -138,7 +172,7 @@ export default function App() {
         .finally(() => setSearching(false));
     }, 280);
     return () => clearTimeout(t);
-  }, [query]);
+  }, [query, view]);
 
   const isLiked = useCallback((t) => liked.some((x) => trackKey(x) === trackKey(t)), [liked]);
 
@@ -409,6 +443,44 @@ export default function App() {
     setPanel(null);
   };
 
+  const openBrowse = () => {
+    setView("browse");
+    setGenrePage(null);
+    setQuery("");
+    setGenres([]);
+    setGenresLoading(true);
+    const token = ++genreProbe.current;
+    const queue = [...GENRES];
+    const workers = Array.from({ length: 6 }, async () => {
+      while (queue.length) {
+        if (genreProbe.current !== token) return;
+        const g = queue.shift();
+        try {
+          const d = await loadGenreMeta(g.id);
+          if (genreProbe.current !== token) return;
+          if (d?.ok && d.genre && (d.genre.trackCount || 0) > 0) {
+            setGenres((prev) => (prev.some((x) => x.id === d.genre.id) ? prev : [...prev, d.genre]));
+          }
+        } catch {
+          /* skip */
+        }
+      }
+    });
+    Promise.all(workers).then(() => {
+      if (genreProbe.current === token) setGenresLoading(false);
+    });
+  };
+
+  const openGenre = (g) => {
+    setView("genre");
+    setGenrePage({ info: g, tracks: [] });
+    setGenreLoading(true);
+    loadGenre(g.id)
+      .then((d) => setGenrePage({ info: d.genre || g, tracks: d.tracks || [] }))
+      .catch(() => setGenrePage({ info: g, tracks: [] }))
+      .finally(() => setGenreLoading(false));
+  };
+
   return (
     <div className={`app ${panel === "lyrics" ? "lyrics-open" : ""}`} onClick={() => ctxMenu && setCtxMenu(null)}>
       <audio
@@ -426,7 +498,14 @@ export default function App() {
           setPlaying(true);
         }}
         onEnded={onEnded}
-        onError={() => setBuffering(false)}
+        onError={() => {
+          setBuffering(false);
+          const audio = audioRef.current;
+          if (!audio || !current || streamRetry.current >= 3) return;
+          streamRetry.current += 1;
+          audio.src = `${streamUrl(current)}&retry=${streamRetry.current}&t=${Date.now()}`;
+          audio.play().catch(() => setPlaying(false));
+        }}
       />
 
       <aside className="sidebar">
@@ -453,20 +532,35 @@ export default function App() {
 
       <main className="main">
         <div className="topbar">
-          {view === "collection" && (
-            <button className="icon-btn" onClick={() => setView("home")} aria-label="Back">
+          {(view === "collection" || view === "genre") && (
+            <button
+              className="icon-btn"
+              onClick={() => setView(view === "genre" ? "browse" : "home")}
+              aria-label="Back"
+            >
               <BackIcon />
             </button>
           )}
           <div className="search-wrap">
-            <SearchIcon size={18} />
+            <SearchIcon size={18} className="search-ico" />
             <input
               ref={searchRef}
               placeholder="Search songs, albums, artists…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onFocus={() => query.trim() && setView("search")}
+              onFocus={() => {
+                if (view === "browse" || view === "genre") return;
+                if (query.trim()) setView("search");
+              }}
             />
+            <button
+              className={`browse-toggle ${view === "browse" || view === "genre" ? "on" : ""}`}
+              onClick={openBrowse}
+              title="Browse all"
+              aria-label="Browse all"
+            >
+              <BrowseIcon size={18} />
+            </button>
           </div>
         </div>
         <div className="content">
@@ -540,6 +634,22 @@ export default function App() {
               onContext={setCtxMenu}
             />
           )}
+          {view === "browse" && (
+            <BrowsePage genres={genres} filter={query} loading={genresLoading} onOpen={openGenre} />
+          )}
+          {view === "genre" && genrePage && (
+            <GenrePage
+              data={genrePage}
+              loading={genreLoading}
+              filter={query}
+              current={current}
+              playing={playing}
+              onPlay={playTrack}
+              onLike={toggleLike}
+              isLiked={isLiked}
+              onContext={setCtxMenu}
+            />
+          )}
           {view === "settings" && (
             <Settings theme={theme} setTheme={setTheme} />
           )}
@@ -587,22 +697,14 @@ export default function App() {
               <RepeatIcon size={18} one={repeat === "one"} />
             </button>
           </div>
-          <div className="seek">
-            <span>{formatTime(currentTime)}</span>
-            <input
-              type="range"
-              min={0}
-              max={duration || 0}
-              step={0.1}
-              value={Math.min(currentTime, duration || 0)}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                if (audioRef.current) audioRef.current.currentTime = v;
-                setCurrentTime(v);
-              }}
-            />
-            <span>{formatTime(duration)}</span>
-          </div>
+          <SeekBar
+            value={currentTime}
+            max={duration || 0}
+            onChange={(v) => {
+              if (audioRef.current) audioRef.current.currentTime = v;
+              setCurrentTime(v);
+            }}
+          />
         </div>
         <div className="extras">
           <button className={`icon-btn ${panel === "lyrics" ? "on" : ""}`} onClick={() => setPanel(panel === "lyrics" ? null : "lyrics")} title="Lyrics">
@@ -615,17 +717,22 @@ export default function App() {
             <button className="icon-btn" onClick={() => setMuted((m) => !m)}>
               <VolumeIcon size={18} level={muted ? 0 : volume} />
             </button>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={muted ? 0 : volume}
-              onChange={(e) => {
-                setMuted(false);
-                setVolume(Number(e.target.value));
-              }}
-            />
+            <div className="vol-wrap">
+              <div className="vol-track">
+                <div className="vol-fill" style={{ width: `${(muted ? 0 : volume) * 100}%` }} />
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={muted ? 0 : volume}
+                onChange={(e) => {
+                  setMuted(false);
+                  setVolume(Number(e.target.value));
+                }}
+              />
+            </div>
           </div>
         </div>
       </footer>
@@ -635,6 +742,7 @@ export default function App() {
         <NavButton id="search" current={view} onClick={setView} label="Search"><SearchIcon size={20} /></NavButton>
         <NavButton id="library" current={view} onClick={setView} label="Library"><LibraryIcon size={20} /></NavButton>
         <NavButton id="recent" current={view} onClick={setView} label="Recent"><ClockIcon size={20} /></NavButton>
+        <NavButton id="settings" current={view} onClick={setView} label="Settings"><GearIcon size={20} /></NavButton>
       </nav>
 
       {panel === "lyrics" && (
@@ -764,6 +872,76 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+function BrowsePage({ genres, filter, loading, onOpen }) {
+  const q = String(filter || "").trim().toLowerCase();
+  const shown = genres.filter((g) => {
+    if ((g.trackCount || 0) <= 0) return false;
+    if (!q) return true;
+    return g.name.toLowerCase().includes(q) || String(g.query || "").toLowerCase().includes(q);
+  });
+  return (
+    <>
+      <h1 className="page-title">Browse all</h1>
+      <p className="page-sub">
+        {loading ? "Finding genres with songs…" : q ? `${shown.length} matching genre${shown.length === 1 ? "" : "s"}` : "Only genres with available songs are listed."}
+      </p>
+      {loading && !genres.length && (
+        <div className="genre-grid">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="genre-tile skel" style={{ background: "var(--secondary)" }} />
+          ))}
+        </div>
+      )}
+      {!loading && !shown.length && <div className="empty">No genres available for that filter.</div>}
+      <div className="genre-grid">
+        {shown.map((g) => (
+          <button key={g.id} className="genre-tile" style={{ background: g.color }} onClick={() => onOpen(g)}>
+            <div className="g-name">{g.name}</div>
+            <div className="g-art">
+              {g.artwork ? <Art src={g.artwork} alt="" /> : <div style={{ width: "100%", height: "100%", background: "#ffffff22" }} />}
+            </div>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function GenrePage({ data, loading, filter, current, playing, onPlay, onLike, isLiked, onContext }) {
+  const info = data.info || {};
+  const q = String(filter || "").trim().toLowerCase();
+  const tracks = (data.tracks || []).filter((t) => {
+    if (!q) return true;
+    return `${t.title} ${t.author} ${t.album || ""}`.toLowerCase().includes(q);
+  });
+  return (
+    <>
+      <div className="genre-hero">
+        <div className="swatch" style={{ background: info.color || "#333" }} />
+        <div>
+          <div className="kicker">Genre</div>
+          <h1 className="page-title" style={{ margin: "4px 0 8px" }}>{info.name}</h1>
+          <p className="page-sub" style={{ margin: 0 }}>
+            {loading ? "Loading songs…" : `${tracks.length} song${tracks.length === 1 ? "" : "s"}`}
+          </p>
+          <div className="row-actions" style={{ marginTop: 14 }}>
+            <button className="btn" disabled={!tracks.length} onClick={() => tracks[0] && onPlay(tracks[0], tracks)}>
+              Play
+            </button>
+            <button className="btn ghost" disabled={!tracks.length} onClick={() => tracks[0] && onPlay(tracks[0], shuffleCopy(tracks))}>
+              Shuffle play
+            </button>
+          </div>
+        </div>
+      </div>
+      {!!tracks.length && (
+        <TrackList tracks={tracks} current={current} playing={playing} onPlay={onPlay} onLike={onLike} isLiked={isLiked} onContext={onContext} />
+      )}
+      {!loading && !tracks.length && <div className="empty">{q ? "No songs in this genre match that filter." : "No songs found for this genre."}</div>}
+    </>
   );
 }
 

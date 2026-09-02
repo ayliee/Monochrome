@@ -1,8 +1,9 @@
 import React from "react";
 
-export function Icon({ d, size = 22, stroke = 1.7, children }) {
+export function Icon({ d, size = 22, stroke = 1.7, children, className }) {
   return (
     <svg
+      className={className}
       width={size}
       height={size}
       viewBox="0 0 24 24"
@@ -102,11 +103,20 @@ export const QueueIcon = (p) => (
   </Icon>
 );
 export const MicIcon = (p) => (
-  <Icon {...p}>
-    <path d="M12 2a3.5 3.5 0 0 0-3.5 3.5v7a3.5 3.5 0 0 0 7 0v-7A3.5 3.5 0 0 0 12 2z" />
-    <path d="M5 11.5a7 7 0 0 0 14 0" />
-    <path d="M12 18.5V22" />
-    <path d="M9 22h6" />
+  <Icon {...p} stroke={1.7}>
+    <rect x="9" y="2.5" width="6" height="11" rx="3" />
+    <path d="M5.5 11.2a6.5 6.5 0 0 0 13 0" />
+    <path d="M12 17.7V21" />
+    <path d="M8.5 21h7" />
+  </Icon>
+);
+export const PinIcon = (p) => <MicIcon {...p} />;
+export const BrowseIcon = (p) => (
+  <Icon {...p} stroke={1.7}>
+    <rect x="3.5" y="3.5" width="7" height="7" rx="1.6" />
+    <rect x="13.5" y="3.5" width="7" height="7" rx="1.6" />
+    <rect x="3.5" y="13.5" width="7" height="7" rx="1.6" />
+    <rect x="13.5" y="13.5" width="7" height="7" rx="1.6" />
   </Icon>
 );
 export const VolumeIcon = ({ level = 1, ...p }) => (

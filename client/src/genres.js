@@ -1,0 +1,36 @@
+export const GENRES = [
+  { id: "music", name: "Music", color: "#d81b60", query: "Today's Top Hits" },
+  { id: "live", name: "Live Events", color: "#7c2bff", query: "live concert hits" },
+  { id: "foryou", name: "Made For You", color: "#1e3a5f", query: "pop mix hits" },
+  { id: "new", name: "New Releases", color: "#5a7a14", query: "new music friday" },
+  { id: "desi", name: "Desi", color: "#e85d04", query: "desi hits" },
+  { id: "pop", name: "Pop", color: "#4a8aa3", query: "pop hits" },
+  { id: "hiphop", name: "Hip-Hop", color: "#4a6d7c", query: "hip hop rap caviar" },
+  { id: "punjabi", name: "Punjabi", color: "#c2185b", query: "punjabi hits" },
+  { id: "charts", name: "Charts", color: "#9b6bb0", query: "top songs global" },
+  { id: "educational", name: "Educational", color: "#5b8fa8", query: "study music focus" },
+  { id: "documentary", name: "Documentary", color: "#4a3d4a", query: "documentary soundtrack" },
+  { id: "comedy", name: "Comedy", color: "#c2186b", query: "comedy songs" },
+  { id: "rock", name: "Rock", color: "#b71c1c", query: "rock hits" },
+  { id: "rnb", name: "R&B", color: "#6a1b9a", query: "r&b soul hits" },
+  { id: "electronic", name: "Electronic", color: "#1565c0", query: "electronic dance hits" },
+  { id: "indie", name: "Indie", color: "#37474f", query: "indie pop hits" },
+  { id: "latin", name: "Latin", color: "#ef6c00", query: "latin hits" },
+  { id: "kpop", name: "K-Pop", color: "#ec407a", query: "k-pop hits" },
+  { id: "country", name: "Country", color: "#8d6e63", query: "country hits" },
+  { id: "metal", name: "Metal", color: "#263238", query: "metal hits" },
+  { id: "jazz", name: "Jazz", color: "#455a64", query: "jazz classics" },
+  { id: "classical", name: "Classical", color: "#5d4037", query: "classical music" },
+  { id: "bollywood", name: "Bollywood", color: "#ff6f00", query: "bollywood hits" },
+  { id: "pakistan", name: "Pakistani", color: "#00897b", query: "pakistani hits" },
+  { id: "chill", name: "Chill", color: "#0277bd", query: "chill hits lo-fi" },
+  { id: "workout", name: "Workout", color: "#e53935", query: "workout hits" },
+  { id: "romance", name: "Romance", color: "#ad1457", query: "love songs" },
+  { id: "party", name: "Party", color: "#f9a825", query: "party hits" },
+  { id: "folk", name: "Folk", color: "#6d4c41", query: "folk acoustic" },
+  { id: "reggae", name: "Reggae", color: "#2e7d32", query: "reggae hits" },
+];
+
+export function genreById(id) {
+  return GENRES.find((g) => g.id === id) || null;
+}

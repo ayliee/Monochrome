@@ -42,14 +42,98 @@ const CLIENT_UA = "MonochromePlayer/1.0 (local-player)";
 
 const trackCache = new Map();
 const ytResolveCache = new Map();
-const audioUrlCache = new Map();
 const browseCache = { data: null, at: 0 };
 const lyricsCache = new Map();
+
+const GENRES = [
+  { id: "music", name: "Music", color: "#d81b60", query: "Today's Top Hits" },
+  { id: "live", name: "Live Events", color: "#7c2bff", query: "live concert hits" },
+  { id: "foryou", name: "Made For You", color: "#1e3a5f", query: "pop mix hits" },
+  { id: "new", name: "New Releases", color: "#5a7a14", query: "new music friday" },
+  { id: "desi", name: "Desi", color: "#e85d04", query: "desi hits" },
+  { id: "pop", name: "Pop", color: "#4a8aa3", query: "pop hits" },
+  { id: "hiphop", name: "Hip-Hop", color: "#4a6d7c", query: "hip hop rap caviar" },
+  { id: "punjabi", name: "Punjabi", color: "#c2185b", query: "punjabi hits" },
+  { id: "charts", name: "Charts", color: "#9b6bb0", query: "top songs global" },
+  { id: "educational", name: "Educational", color: "#5b8fa8", query: "study music focus" },
+  { id: "documentary", name: "Documentary", color: "#4a3d4a", query: "documentary soundtrack" },
+  { id: "comedy", name: "Comedy", color: "#c2186b", query: "comedy songs" },
+  { id: "rock", name: "Rock", color: "#b71c1c", query: "rock hits" },
+  { id: "rnb", name: "R&B", color: "#6a1b9a", query: "r&b soul hits" },
+  { id: "electronic", name: "Electronic", color: "#1565c0", query: "electronic dance hits" },
+  { id: "indie", name: "Indie", color: "#37474f", query: "indie pop hits" },
+  { id: "latin", name: "Latin", color: "#ef6c00", query: "latin hits" },
+  { id: "kpop", name: "K-Pop", color: "#ec407a", query: "k-pop hits" },
+  { id: "country", name: "Country", color: "#8d6e63", query: "country hits" },
+  { id: "metal", name: "Metal", color: "#263238", query: "metal hits" },
+  { id: "jazz", name: "Jazz", color: "#455a64", query: "jazz classics" },
+  { id: "classical", name: "Classical", color: "#5d4037", query: "classical music" },
+  { id: "bollywood", name: "Bollywood", color: "#ff6f00", query: "bollywood hits" },
+  { id: "pakistan", name: "Pakistani", color: "#00897b", query: "pakistani hits" },
+  { id: "chill", name: "Chill", color: "#0277bd", query: "chill hits lo-fi" },
+  { id: "workout", name: "Workout", color: "#e53935", query: "workout hits" },
+  { id: "romance", name: "Romance", color: "#ad1457", query: "love songs" },
+  { id: "party", name: "Party", color: "#f9a825", query: "party hits" },
+  { id: "folk", name: "Folk", color: "#6d4c41", query: "folk acoustic" },
+  { id: "reggae", name: "Reggae", color: "#2e7d32", query: "reggae hits" },
+];
+
+async function mapPool(items, n, fn) {
+  const out = new Array(items.length);
+  let i = 0;
+  const worker = async () => {
+    while (i < items.length) {
+      const idx = i++;
+      out[idx] = await fn(items[idx], idx);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker));
+  return out;
+}
+
+const genreProbeCache = new Map();
+
+async function probeGenre(g) {
+  const hit = genreProbeCache.get(g.id);
+  if (hit && Date.now() - hit.at < 8 * 60 * 1000) return hit.data;
+  let tracks = [];
+  let art = null;
+  try {
+    tracks = await loadTracks(`spsearch:${g.query}`);
+  } catch {
+    tracks = [];
+  }
+  if (!tracks.length) {
+    try {
+      const s = await lavaSearch(g.query);
+      tracks = s.tracks || [];
+      art = s.playlists?.[0]?.artwork || s.albums?.[0]?.artwork || null;
+    } catch {
+      tracks = [];
+    }
+  }
+  if (!art && tracks[0]?.artwork) art = tracks[0].artwork;
+  const data = { ...g, artwork: art, trackCount: tracks.length };
+  genreProbeCache.set(g.id, { at: Date.now(), data });
+  return data;
+}
+
+async function genresWithArt() {
+  const data = await mapPool(GENRES, 8, async (g) => {
+    try {
+      return await probeGenre(g);
+    } catch {
+      return null;
+    }
+  });
+  return data.filter((g) => g && g.trackCount > 0);
+}
 
 const COVER_HOSTS = [
   "i.scdn.co",
   "scdn.co",
   "mosaic.scdn.co",
+  "spotifycdn.com",
   "i.ytimg.com",
   "yt3.googleusercontent.com",
   "lh3.googleusercontent.com",
@@ -195,90 +279,228 @@ async function lavaSearch(query) {
   };
 }
 
-async function resolveYoutubeId(track) {
+async function resolveYoutubeCandidates(track) {
   if (!track) throw new Error("no_track");
-  if (track.source === "youtube") return track.id;
+  if (track.source === "youtube" && isVideoId(track.id)) return [track.id];
   const key = `${track.source}:${track.id}`;
   if (ytResolveCache.has(key)) return ytResolveCache.get(key);
   const queries = [];
   if (track.isrc) queries.push(`ytmsearch:${track.isrc}`);
   queries.push(`ytmsearch:${track.title} ${track.author}`);
   queries.push(`ytsearch:${track.title} ${track.author} audio`);
-  let best = null;
-  let bestScore = Infinity;
+  queries.push(`ytsearch:${track.title} ${track.author} official`);
+  const ranked = [];
   for (const q of queries) {
     try {
       const results = await loadTracks(q);
       for (const r of results.slice(0, 8)) {
+        if (!isVideoId(r.id)) continue;
         const score = Math.abs((r.duration || 0) - (track.duration || 0));
         const titleHit =
           r.title.toLowerCase().includes(String(track.title).toLowerCase().slice(0, 18)) ||
           String(track.title).toLowerCase().includes(r.title.toLowerCase().slice(0, 18));
-        const total = score + (titleHit ? 0 : 25000);
-        if (total < bestScore) {
-          bestScore = total;
-          best = r;
-        }
-        if (score < 4000 && titleHit) {
-          best = r;
-          bestScore = score;
-          break;
-        }
+        ranked.push({ id: r.id, score: score + (titleHit ? 0 : 25000) });
       }
-      if (best && bestScore < 8000) break;
     } catch {
       /* next */
     }
   }
-  if (!best) throw new Error("resolve_failed");
-  ytResolveCache.set(key, best.id);
-  return best.id;
+  ranked.sort((a, b) => a.score - b.score);
+  const ids = [];
+  for (const r of ranked) if (!ids.includes(r.id)) ids.push(r.id);
+  if (!ids.length) throw new Error("resolve_failed");
+  ytResolveCache.set(key, ids.slice(0, 6));
+  return ytResolveCache.get(key);
 }
 
-function runYtDlp(args, timeoutMs = 28000) {
+const audioBufCache = new Map();
+const audioPending = new Map();
+
+function isVideoId(id) {
+  return typeof id === "string" && /^[\w-]{6,20}$/.test(id);
+}
+
+function llGetRaw(pathname, timeoutMs = 90000) {
   return new Promise((resolve, reject) => {
-    const child = spawn("yt-dlp", args, { stdio: ["ignore", "pipe", "pipe"] });
-    let out = "";
+    const url = new URL(pathname, LL_BASE);
+    const lib = url.protocol === "https:" ? https : http;
+    const req = lib.request(
+      url,
+      { method: "GET", headers: llHeaders(), timeout: timeoutMs },
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          resolve({
+            status: res.statusCode || 0,
+            mime: res.headers["content-type"] || "",
+            buf: Buffer.concat(chunks),
+          });
+        });
+      }
+    );
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("ll_timeout"));
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+function remuxToMp4(buf) {
+  return new Promise((resolve, reject) => {
+    const dir = fs.mkdtempSync(path.join("/tmp", "mc-"));
+    const inn = path.join(dir, "in.bin");
+    const out = path.join(dir, "out.m4a");
+    const cleanup = () => {
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+    };
+    try {
+      fs.writeFileSync(inn, buf);
+    } catch (e) {
+      cleanup();
+      reject(e);
+      return;
+    }
+    const child = spawn("ffmpeg", [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      inn,
+      "-vn",
+      "-c:a",
+      "aac",
+      "-b:a",
+      "160k",
+      "-movflags",
+      "+faststart",
+      out,
+    ]);
     const t = setTimeout(() => {
       child.kill("SIGKILL");
-      reject(new Error("extractor_timeout"));
-    }, timeoutMs);
-    child.stdout.on("data", (d) => (out += d));
+      cleanup();
+      reject(new Error("remux_timeout"));
+    }, 45000);
     child.on("error", (e) => {
       clearTimeout(t);
+      cleanup();
       reject(e);
     });
     child.on("close", (code) => {
       clearTimeout(t);
-      if (code === 0 && out.trim()) resolve(out.trim());
-      else reject(new Error("extractor_failed"));
+      try {
+        if (code === 0 && fs.existsSync(out)) {
+          const result = fs.readFileSync(out);
+          cleanup();
+          if (result.length > 2000) return resolve(result);
+        }
+      } catch (e) {
+        cleanup();
+        reject(e);
+        return;
+      }
+      cleanup();
+      reject(new Error("remux_failed"));
     });
   });
 }
 
-async function getAudioUrl(videoId) {
-  const hit = audioUrlCache.get(videoId);
-  const now = Date.now() / 1000;
-  if (hit && hit.expire - 90 > now) return hit.url;
-  const raw = await runYtDlp([
-    "-f",
-    "bestaudio[ext=m4a]/bestaudio[acodec^=mp4a]/bestaudio/best",
-    "-g",
-    "--no-playlist",
-    "--no-warnings",
-    "--no-check-certificates",
-    `https://www.youtube.com/watch?v=${videoId}`,
-  ]);
-  const url = raw.split("\n").filter(Boolean).pop();
-  let expire = now + 60 * 60 * 4;
-  try {
-    const exp = new URL(url).searchParams.get("expire");
-    if (exp) expire = Number(exp);
-  } catch {
-    /* default */
+async function fetchYoutubeAudio(videoId) {
+  if (!isVideoId(videoId)) throw new Error("bad_id");
+  const queries = ["itag=140", "itag=139", "", "itag=251"];
+  let lastErr = "no_stream";
+  for (const q of queries) {
+    const path = `/youtube/stream/${encodeURIComponent(videoId)}${q ? `?${q}` : ""}`;
+    try {
+      const r = await llGetRaw(path);
+      if (r.status === 200 && r.buf.length > 2000) {
+        let buf = r.buf;
+        let mime = "audio/mp4";
+        try {
+          buf = await remuxToMp4(r.buf);
+        } catch {
+          mime = r.mime.split(";")[0].trim() || (r.buf[4] === 0x66 ? "audio/mp4" : "audio/webm");
+        }
+        return { buf, mime, at: Date.now() };
+      }
+      lastErr = `status_${r.status}`;
+    } catch (e) {
+      lastErr = e.message || "fetch_failed";
+    }
   }
-  audioUrlCache.set(videoId, { url, expire });
-  return url;
+  throw new Error(lastErr);
+}
+
+async function loadAudioForTrack(track) {
+  const ids = await resolveYoutubeCandidates(track);
+  let last = null;
+  for (const id of ids) {
+    try {
+      return await loadAudio(id);
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last || new Error("no_stream");
+}
+
+async function loadAudio(videoId) {
+  const hit = audioBufCache.get(videoId);
+  if (hit && Date.now() - hit.at < 25 * 60 * 1000) return hit;
+  if (audioPending.has(videoId)) return audioPending.get(videoId);
+  const p = fetchYoutubeAudio(videoId)
+    .then((rec) => {
+      audioBufCache.set(videoId, rec);
+      if (audioBufCache.size > 10) {
+        const oldest = audioBufCache.keys().next().value;
+        audioBufCache.delete(oldest);
+      }
+      return rec;
+    })
+    .finally(() => audioPending.delete(videoId));
+  audioPending.set(videoId, p);
+  return p;
+}
+
+function sendAudioRange(req, res, rec) {
+  const size = rec.buf.length;
+  const mime = rec.mime || "audio/mp4";
+  const range = req.headers.range;
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Content-Type", mime);
+  if (!range) {
+    res.writeHead(200, { "Content-Length": size });
+    res.end(rec.buf);
+    return;
+  }
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(range));
+  if (!m) {
+    res.writeHead(416, { "Content-Range": `bytes */${size}` });
+    res.end();
+    return;
+  }
+  let start = m[1] ? Number(m[1]) : 0;
+  let end = m[2] ? Number(m[2]) : size - 1;
+  if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= size) {
+    res.writeHead(416, { "Content-Range": `bytes */${size}` });
+    res.end();
+    return;
+  }
+  end = Math.min(end, size - 1);
+  const slice = rec.buf.subarray(start, end + 1);
+  res.writeHead(206, {
+    "Content-Range": `bytes ${start}-${end}/${size}`,
+    "Content-Length": slice.length,
+  });
+  res.end(slice);
 }
 
 async function lookupTrack(query) {
@@ -438,6 +660,50 @@ async function handleApi(req, res) {
     return json(res, 200, data);
   }
 
+  if (p === "/api/genres") {
+    return json(res, 200, { genres: await genresWithArt() });
+  }
+
+  if (p === "/api/genre-meta") {
+    const id = String(q.id || "").trim();
+    const g = GENRES.find((x) => x.id === id);
+    if (!g) return json(res, 404, { error: "Unknown genre" });
+    const rec = await probeGenre(g);
+    if (!rec.trackCount) return json(res, 200, { ok: false, genre: rec });
+    return json(res, 200, { ok: true, genre: rec });
+  }
+
+  if (p === "/api/genre") {
+    const id = String(q.id || "").trim();
+    const g = GENRES.find((x) => x.id === id);
+    if (!g) return json(res, 404, { error: "Unknown genre" });
+    const search = await lavaSearch(g.query);
+    let tracks = [...(search.tracks || [])];
+    const pl = (search.playlists || [])[0];
+    if (pl?.url) {
+      try {
+        const col = await loadCollection(pl.url);
+        if (col.tracks?.length) tracks = col.tracks;
+      } catch {
+        /* keep search tracks */
+      }
+    }
+    if (tracks.length < 12) {
+      try {
+        const extra = await loadTracks(`spsearch:${g.query}`);
+        const seen = new Set(tracks.map((t) => t.id));
+        for (const t of extra) {
+          if (seen.has(t.id)) continue;
+          seen.add(t.id);
+          tracks.push(t);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return json(res, 200, { genre: g, tracks });
+  }
+
   if (p === "/api/collection") {
     const url = String(q.url || "").trim();
     if (!url) return json(res, 400, { error: "Missing url" });
@@ -500,32 +766,15 @@ async function handleApi(req, res) {
     const body = await readBody(req);
     const track = await lookupTrack(body);
     if (!track) return json(res, 200, { ok: false });
-    const videoId = await resolveYoutubeId(track);
-    getAudioUrl(videoId).catch(() => {});
+    loadAudioForTrack(track).catch(() => {});
     return json(res, 200, { ok: true });
   }
 
   if (p === "/api/stream") {
     const track = await lookupTrack(q);
     if (!track) return json(res, 404, { error: "Unknown track" });
-    const videoId = await resolveYoutubeId(track);
-    const audioUrl = await getAudioUrl(videoId);
-    const headers = {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      Accept: "*/*",
-    };
-    if (req.headers.range) headers.Range = req.headers.range;
-    const up = await fetch(audioUrl, { headers, signal: AbortSignal.timeout(30000) });
-    if (!up.ok && up.status !== 206) {
-      audioUrlCache.delete(videoId);
-      return json(res, 502, { error: "Stream failed" });
-    }
-    return pipeWeb(res, up, {
-      "Content-Type": up.headers.get("content-type") || "audio/mp4",
-      "Accept-Ranges": up.headers.get("accept-ranges") || "bytes",
-      "Cache-Control": "no-store",
-    });
+    const rec = await loadAudioForTrack(track);
+    return sendAudioRange(req, res, rec);
   }
 
   json(res, 404, { error: "Not found" });
