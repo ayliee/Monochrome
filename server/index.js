@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { Readable } from "stream";
+import zlib from "zlib";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -154,13 +155,16 @@ const MIME = {
 
 function send(res, status, body, headers = {}) {
   const data = typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body);
+  const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
   res.writeHead(status, {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
     "Content-Type": typeof body === "object" && !Buffer.isBuffer(body) ? "application/json" : "text/plain",
+    // Explicit length keeps proxies from switching to chunked encoding.
+    "Content-Length": buf.length,
     ...headers,
   });
-  res.end(data);
+  res.end(buf);
 }
 
 function json(res, status, obj) {
@@ -530,6 +534,8 @@ async function lookupTrack(query) {
   return null;
 }
 
+const COMPRESSIBLE = new Set([".html", ".js", ".css", ".json", ".svg", ".woff2"]);
+
 function serveStatic(req, res) {
   const u = parseUrl(req);
   let rel = decodeURIComponent(u.pathname);
@@ -545,10 +551,28 @@ function serveStatic(req, res) {
       });
     }
     const ext = path.extname(file).toLowerCase();
-    res.writeHead(200, {
+    const headers = {
       "Content-Type": MIME[ext] || "application/octet-stream",
       "Cache-Control": ext === ".html" ? "no-store" : "public, max-age=3600",
-    });
+      Vary: "Accept-Encoding",
+    };
+
+    // Compress text assets. The JS bundle is ~210 kB raw; gzip cuts it to
+    // ~66 kB, which keeps the response small enough to survive flaky proxies.
+    const accepts = String(req.headers["accept-encoding"] || "");
+    if (COMPRESSIBLE.has(ext) && /\bgzip\b/.test(accepts) && st.size > 1024) {
+      headers["Content-Encoding"] = "gzip";
+      res.writeHead(200, headers);
+      const gz = zlib.createGzip();
+      gz.on("error", () => res.end());
+      fs.createReadStream(file).pipe(gz).pipe(res);
+      return;
+    }
+
+    // Send Content-Length: chunked responses stall behind some reverse proxies
+    // and tunnels, which truncates the JS bundle.
+    headers["Content-Length"] = st.size;
+    res.writeHead(200, headers);
     fs.createReadStream(file).pipe(res);
   });
 }
@@ -575,7 +599,26 @@ async function handleApi(req, res) {
   const p = u.pathname;
   const q = Object.fromEntries(u.searchParams.entries());
 
-  if (p === "/api/health") return json(res, 200, { ok: true, player: "monochrome" });
+  // Allow a separately hosted frontend (e.g. the published static build) to
+  // call this API. Credentials are never used, so a wildcard origin is safe.
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, { "Content-Length": 0 });
+    return res.end();
+  }
+
+  if (p === "/api/health") {
+    return json(res, 200, {
+      ok: true,
+      player: "monochrome",
+      // Additive: lets the client know whether a Lavalink node is wired up,
+      // so it can fall back to the bundled offline catalogue instead of
+      // showing an empty page when the backend has nothing to search.
+      lavalink: { configured: Boolean(LL_HOST && LL_AUTH) },
+    });
+  }
 
   if (p === "/api/search") {
     const query = String(q.q || "").trim();
