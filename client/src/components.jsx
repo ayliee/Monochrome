@@ -228,6 +228,7 @@ function SearchPanel({ query, suggestions, searching, onPick }) {
 export function Hero({ items, onOpen, onPlay, onShuffle }) {
   const [index, setIndex] = useState(0);
   const timer = useRef(0);
+  const drag = useRef(null);
   const count = items.length;
 
   const show = useCallback(
@@ -248,11 +249,37 @@ export function Hero({ items, onOpen, onPlay, onShuffle }) {
     return () => clearInterval(timer.current);
   }, [count]);
 
+  // Swipe / drag to move between slides. Vertical drags are ignored so the
+  // page still scrolls normally over the hero.
+  const onPointerDown = (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    drag.current = { x: e.clientX, y: e.clientY };
+  };
+  const onPointerUp = (e) => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d || !count) return;
+    const dx = e.clientX - d.x;
+    const dy = e.clientY - d.y;
+    if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
+    show(index + (dx < 0 ? 1 : -1));
+  };
+
   if (!count) return null;
   const current = items[index] || items[0];
 
   return (
-    <section className="hero fade-in" data-hero onMouseEnter={() => clearInterval(timer.current)}>
+    <section
+      className="hero fade-in"
+      data-hero
+      onMouseEnter={() => clearInterval(timer.current)}
+      onMouseLeave={() => {
+        if (count > 1) timer.current = setInterval(() => setIndex((i) => (i + 1) % count), 7600);
+      }}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => { drag.current = null; }}
+    >
       <div className="hero__backdrop">
         {items.map((it, i) => (
           <img key={it.key} src={coverUrl(it.art)} alt="" className={cls(i === index && "is-active")} loading={i < 2 ? "eager" : "lazy"} />
@@ -331,13 +358,8 @@ export function Hero({ items, onOpen, onPlay, onShuffle }) {
           </button>
         ))}
       </div>
-      <div className="hero__nav">
-        <button className="hero__nav-btn" onClick={() => show(index - 1)} aria-label="Previous featured">
-          <ChevronLeftIcon size={17} />
-        </button>
-        <button className="hero__nav-btn" onClick={() => show(index + 1)} aria-label="Next featured">
-          <ChevronRightIcon size={17} />
-        </button>
+      <div className="hero__swipe-hint" aria-hidden="true">
+        <ChevronLeftIcon size={13} /> Swipe <ChevronRightIcon size={13} />
       </div>
     </section>
   );

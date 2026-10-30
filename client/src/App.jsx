@@ -423,7 +423,12 @@ export default function App() {
       const active = track.querySelector("[data-active='1']");
       const view = track.parentElement;
       if (!active || !view) return;
-      const y = active.offsetTop - view.clientHeight * 0.2;
+      // `.lyrics-track` is the offset parent, so `offsetTop` is measured from
+      // the top of the track. Shift it so the active line sits at the focus
+      // point (a fraction of the viewport height, set in CSS) — that keeps it
+      // and the lines around it in frame.
+      const focus = parseFloat(getComputedStyle(view).getPropertyValue("--lyric-focus")) || 0.4;
+      const y = active.offsetTop - view.clientHeight * focus;
       track.style.transform = `translate3d(0, ${-y}px, 0)`;
     };
     raf = requestAnimationFrame(() => {
@@ -913,37 +918,73 @@ export default function App() {
           <button className="icon-btn lyrics-close" onClick={() => setPanel(null)} aria-label="Close lyrics">
             <CloseIcon size={17} />
           </button>
-          <div className="lyrics-viewport">
-            {!current && <Empty icon={<MicIcon size={34} />} message="Play a song to see lyrics." />}
-            {current && lyricsStatus === "loading" && <Empty icon={<EqualizerIcon size={34} />} message="Fetching lyrics…" />}
-            {current && lyricsStatus === "empty" && (
-              <Empty icon={<MicIcon size={34} />} message="No lyrics found for this track." />
-            )}
-            {lyrics?.instrumental && <Empty icon={<WaveIcon size={34} />} message="Instrumental" />}
-            {lrc.length > 0 && (
-              <div className="lyrics-track" ref={lyricsRef}>
-                {lrc.map((line, i) => {
-                  const dist = i - lyricIndex;
-                  const kind = dist === 0 ? "on" : dist < 0 ? "past" : `next n${Math.min(dist, 6)}`;
-                  return (
-                    <button
-                      type="button"
-                      key={i}
-                      data-active={dist === 0 ? "1" : "0"}
-                      className={`lyric-line ${kind}`}
-                      onClick={() => {
-                        if (audioRef.current) audioRef.current.currentTime = line.t;
-                      }}
-                    >
-                      {line.text || "♪"}
-                    </button>
-                  );
-                })}
+
+          <div className="lyrics-panel">
+            <div className="lyrics-side">
+              <div className="lyrics-art">
+                <Art src={current?.artwork} alt="" />
               </div>
-            )}
-            {!lrc.length && lyrics?.plainLyrics && (
-              <div className="lyrics-track lyrics-plain">{lyrics.plainLyrics}</div>
-            )}
+              <div className="lyrics-meta">
+                <div className="eyebrow">Now playing</div>
+                <h2 className="lyrics-title">{current?.title || "Nothing playing"}</h2>
+                <p className="lyrics-artist">
+                  {current?.author || "Search to start listening"}
+                  {current?.album ? <span className="lyrics-album">{current.album}</span> : null}
+                </p>
+              </div>
+              {current && (
+                <div className="lyrics-progress">
+                  <Timeline
+                    value={currentTime}
+                    max={duration || 0}
+                    buffered={buffered}
+                    onSeek={(v) => {
+                      if (audioRef.current) audioRef.current.currentTime = v;
+                      setCurrentTime(v);
+                    }}
+                  />
+                  <div className="lyrics-times">
+                    <span>{formatTime(currentTime)}</span>
+                    <span className="total">/ {formatTime(duration)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="lyrics-viewport">
+              {!current && <Empty icon={<MicIcon size={34} />} message="Play a song to see lyrics." />}
+              {current && lyricsStatus === "loading" && (
+                <Empty icon={<EqualizerIcon size={34} />} message="Fetching lyrics…" />
+              )}
+              {current && lyricsStatus === "empty" && (
+                <Empty icon={<MicIcon size={34} />} message="No lyrics found for this track." />
+              )}
+              {lyrics?.instrumental && <Empty icon={<WaveIcon size={34} />} message="Instrumental" />}
+              {lrc.length > 0 && (
+                <div className="lyrics-track" ref={lyricsRef}>
+                  {lrc.map((line, i) => {
+                    const dist = i - lyricIndex;
+                    const kind = dist === 0 ? "on" : dist < 0 ? "past" : `next n${Math.min(dist, 6)}`;
+                    return (
+                      <button
+                        type="button"
+                        key={i}
+                        data-active={dist === 0 ? "1" : "0"}
+                        className={`lyric-line ${kind}`}
+                        onClick={() => {
+                          if (audioRef.current) audioRef.current.currentTime = line.t;
+                        }}
+                      >
+                        {line.text || "♪"}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {!lrc.length && lyrics?.plainLyrics && (
+                <div className="lyrics-track lyrics-plain">{lyrics.plainLyrics}</div>
+              )}
+            </div>
           </div>
         </aside>
       )}
