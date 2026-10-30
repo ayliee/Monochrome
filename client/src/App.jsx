@@ -17,6 +17,7 @@ import {
   trackKey,
 } from "./api.js";
 import { GENRES } from "./genres.js";
+import { ACCENTS, applyPrefs, LYRIC_SIZES, loadPrefs, PLAYER_SIZES, savePrefs, THEMES } from "./prefs.js";
 import {
   ArtistCard,
   Art,
@@ -68,6 +69,7 @@ import {
   ShuffleIcon,
   SparklesIcon,
   StarIcon,
+  TrashIcon,
   VolumeIcon,
   WaveIcon,
 } from "./icons.jsx";
@@ -75,7 +77,6 @@ import {
 const LS_LIKED = "mc-liked";
 const LS_RECENT = "mc-recent";
 const LS_VOL = "mc-vol";
-const LS_THEME = "mc-theme";
 
 function loadJson(key, fallback) {
   try {
@@ -134,7 +135,7 @@ export default function App() {
   const [lyrics, setLyrics] = useState(null);
   const [lyricsStatus, setLyricsStatus] = useState("idle");
   const [ctxMenu, setCtxMenu] = useState(null);
-  const [theme, setTheme] = useState(() => localStorage.getItem(LS_THEME) || "monochrome");
+  const [prefs, setPrefs] = useState(() => loadPrefs());
   const [buffering, setBuffering] = useState(false);
   const [genres, setGenres] = useState([]);
   const [genresLoading, setGenresLoading] = useState(false);
@@ -155,9 +156,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem(LS_THEME, theme);
-  }, [theme]);
+    applyPrefs(prefs);
+    savePrefs(prefs);
+  }, [prefs]);
 
   useEffect(() => {
     localStorage.setItem(LS_LIKED, JSON.stringify(liked.slice(0, 400)));
@@ -222,6 +223,18 @@ export default function App() {
     [liked, toast]
   );
 
+  const clearData = useCallback(() => {
+    try {
+      localStorage.removeItem(LS_LIKED);
+      localStorage.removeItem(LS_RECENT);
+    } catch {
+      /* ignore */
+    }
+    setLiked([]);
+    setRecent([]);
+    toast("Cleared liked songs and history", <TrashIcon size={15} />);
+  }, [toast]);
+
   const pushRecent = useCallback((t) => {
     setRecent((prev) => [t, ...prev.filter((x) => trackKey(x) !== trackKey(t))].slice(0, 80));
   }, []);
@@ -244,9 +257,22 @@ export default function App() {
     (track, list) => {
       const src = list && list.length ? list : [track];
       const i = Math.max(0, src.findIndex((x) => trackKey(x) === trackKey(track)));
+      // "Shuffle when playing" reorders the rest of the list around the track
+      // the user actually picked, so the track they chose still plays first.
+      if (prefs.shuffleOnPlay && src.length > 1) {
+        const rest = src.filter((_, n) => n !== i);
+        for (let n = rest.length - 1; n > 0; n--) {
+          const j = Math.floor(Math.random() * (n + 1));
+          const tmp = rest[n];
+          rest[n] = rest[j];
+          rest[j] = tmp;
+        }
+        playAt([track, ...rest], 0);
+        return;
+      }
       playAt(src, i);
     },
-    [playAt]
+    [playAt, prefs.shuffleOnPlay]
   );
 
   const addToQueue = (track) => {
@@ -314,6 +340,7 @@ export default function App() {
         setLyricsStatus(l ? "ok" : "empty");
       })
       .catch(() => setLyricsStatus("empty"));
+    if (prefs.autoLyrics) setPanel("lyrics");
     prefetch(queue[index + 1]);
     if ("mediaSession" in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
@@ -333,7 +360,7 @@ export default function App() {
       navigator.mediaSession.setActionHandler("previoustrack", () => skip(-1));
       navigator.mediaSession.setActionHandler("nexttrack", () => skip(1));
     }
-  }, [current && trackKey(current)]);
+  }, [current && trackKey(current), prefs.autoLyrics]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -348,8 +375,17 @@ export default function App() {
       audioRef.current.play();
       return;
     }
-    if (index < queue.length - 1 || repeat === "all") skip(1);
-    else setPlaying(false);
+    if (index < queue.length - 1 || repeat === "all") {
+      skip(1);
+      return;
+    }
+    // "Autoplay" keeps the music going by wrapping back to the start.
+    if (prefs.autoplay && queue.length > 1) {
+      setIndex(0);
+      setPlaying(true);
+      return;
+    }
+    setPlaying(false);
   };
 
   useEffect(() => {
@@ -845,7 +881,13 @@ export default function App() {
 
         {view === "settings" && (
           <div className="wrap">
-            <Settings theme={theme} setTheme={setTheme} online={isOnline()} probed={hasProbed()} />
+            <Settings
+              prefs={prefs}
+              setPrefs={setPrefs}
+              online={isOnline()}
+              probed={hasProbed()}
+              onClearData={clearData}
+            />
           </div>
         )}
       </main>
@@ -1758,73 +1800,208 @@ function TrackPage({
 
 /* ---------------------------------------------------------------- settings */
 
-function Settings({ theme, setTheme, online, probed }) {
+function Settings({ prefs, setPrefs, online, probed, onClearData }) {
+  const set = (patch) => setPrefs((p) => ({ ...p, ...patch }));
+
   return (
     <>
-      <PageHead title="Settings" sub="Tune the player to your taste." />
+      <PageHead title="Settings" sub="Tune the player to your taste — every change is saved on this device." />
       <div className="settings">
-        <div className="row">
-          <div>
-            <div className="k">Theme</div>
-            <div className="d">Choose your preferred color scheme</div>
+        <div className="settings__group">
+          <div className="settings__group-title">Appearance</div>
+
+          <div className="row">
+            <div>
+              <div className="k">Theme</div>
+              <div className="d">
+                {prefs.theme === "lunar"
+                  ? "Lunar Peach — warm peach accents on near-black."
+                  : "Monochrome — every hue stripped out, pure greyscale."}
+              </div>
+            </div>
+            <div className="pill">
+              {THEMES.map((t) => (
+                <button key={t.id} className={prefs.theme === t.id ? "on" : ""} onClick={() => set({ theme: t.id })}>
+                  {t.name}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="pill">
-            <button className={theme === "monochrome" ? "on" : ""} onClick={() => setTheme("monochrome")}>
-              Black
+
+          <div className={"row" + (prefs.theme === "monochrome" ? " is-disabled" : "")}>
+            <div>
+              <div className="k">Accent colour</div>
+              <div className="d">
+                {prefs.theme === "monochrome"
+                  ? "The Monochrome theme is deliberately colourless — switch to Lunar Peach to pick an accent."
+                  : "Tints the brand colour across buttons, chips, the scrubber and the active lyric."}
+              </div>
+            </div>
+            <div className="swatches">
+              {ACCENTS.map((a) => (
+                <button
+                  key={a.id}
+                  className={cls("swatch", prefs.accent === a.id && "on")}
+                  style={{ background: a.swatch }}
+                  onClick={() => set({ accent: a.id })}
+                  title={a.name}
+                  aria-label={a.name}
+                  aria-pressed={prefs.accent === a.id}
+                  disabled={prefs.theme === "monochrome"}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="row">
+            <div>
+              <div className="k">Lyrics text size</div>
+              <div className="d">How large the synced words render in the live lyrics panel.</div>
+            </div>
+            <div className="pill">
+              {LYRIC_SIZES.map((o) => (
+                <button key={o.id} className={prefs.lyricSize === o.id ? "on" : ""} onClick={() => set({ lyricSize: o.id })}>
+                  {o.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="row">
+            <div>
+              <div className="k">Player size</div>
+              <div className="d">Scales the bottom bar and its artwork — compact leaves more room for content.</div>
+            </div>
+            <div className="pill">
+              {PLAYER_SIZES.map((o) => (
+                <button key={o.id} className={prefs.playerSize === o.id ? "on" : ""} onClick={() => set({ playerSize: o.id })}>
+                  {o.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="row">
+            <div>
+              <div className="k">Reduce motion</div>
+              <div className="d">Turns off carousel transitions and page animations.</div>
+            </div>
+            <Toggle on={prefs.reduceMotion} onChange={(v) => set({ reduceMotion: v })} label="Reduce motion" />
+          </div>
+        </div>
+
+        <div className="settings__group">
+          <div className="settings__group-title">Playback</div>
+
+          <div className="row">
+            <div>
+              <div className="k">Autoplay</div>
+              <div className="d">Keep playing from the top of the queue when the last track ends.</div>
+            </div>
+            <Toggle on={prefs.autoplay} onChange={(v) => set({ autoplay: v })} label="Autoplay" />
+          </div>
+
+          <div className="row">
+            <div>
+              <div className="k">Shuffle when playing</div>
+              <div className="d">Reorders the rest of the list around the track you picked.</div>
+            </div>
+            <Toggle on={prefs.shuffleOnPlay} onChange={(v) => set({ shuffleOnPlay: v })} label="Shuffle when playing" />
+          </div>
+
+          <div className="row">
+            <div>
+              <div className="k">Open lyrics automatically</div>
+              <div className="d">Brings up the live lyrics panel as soon as a track starts.</div>
+            </div>
+            <Toggle on={prefs.autoLyrics} onChange={(v) => set({ autoLyrics: v })} label="Open lyrics automatically" />
+          </div>
+        </div>
+
+        <div className="settings__group">
+          <div className="settings__group-title">Your data</div>
+
+          <div className="row">
+            <div>
+              <div className="k">Liked songs &amp; history</div>
+              <div className="d">
+                Liked songs and recently played are stored in this browser only — nothing is uploaded.
+              </div>
+            </div>
+            <button className="btn btn--ghost" onClick={onClearData}>
+              Clear my data
             </button>
-            <button className={theme === "white" ? "on" : ""} onClick={() => setTheme("white")}>
-              White
-            </button>
           </div>
-        </div>
-        <div className="row">
-          <div>
-            <div className="k">Streaming</div>
-            <div className="d">
-              Full tracks are resolved server-side. Lavalink credentials never leave the server.
+
+          <div className="row">
+            <div>
+              <div className="k">Streaming</div>
+              <div className="d">
+                Full tracks are resolved server-side. Lavalink credentials never leave the server.
+              </div>
             </div>
           </div>
-        </div>
-        <div className="row">
-          <div>
-            <div className="k">Backend</div>
-            <div className="d">
-              {probed
-                ? online
-                  ? "Connected to the catalogue — searching and streaming are live."
-                  : "Backend unreachable — the offline catalogue is being served instead."
-                : "Checking the catalogue…"}
+
+          <div className="row">
+            <div>
+              <div className="k">Backend</div>
+              <div className="d">
+                {probed
+                  ? online
+                    ? "Connected to the catalogue — searching and streaming are live."
+                    : "Backend unreachable — the offline catalogue is being served instead."
+                  : "Checking the catalogue…"}
+              </div>
             </div>
           </div>
-        </div>
-        <div className="row">
-          <div>
-            <div className="k">Lyrics</div>
-            <div className="d">Live synced lyrics provided by LRCLIB.</div>
-          </div>
-        </div>
-        <div className="row">
-          <div>
-            <div className="k">Shortcuts</div>
-            <div className="d">
-              Space play/pause · ←/→ seek · Shift+←/→ skip · S shuffle · R repeat · L lyrics · Q queue · / search
+
+          <div className="row">
+            <div>
+              <div className="k">Lyrics</div>
+              <div className="d">Live synced lyrics provided by LRCLIB.</div>
             </div>
           </div>
-        </div>
-        <div className="row">
-          <div>
-            <div className="k">Credits</div>
-            <div className="d">
-              This web has been made by Ayle (@alyfinnn) By{" "}
-              <a className="credit-link" href="https://discord.gg/aerox" target="_blank" rel="noreferrer">
-                AeroX
-              </a>
-              .
+
+          <div className="row">
+            <div>
+              <div className="k">Shortcuts</div>
+              <div className="d">
+                Space play/pause · ←/→ seek · Shift+←/→ skip · S shuffle · R repeat · L lyrics · Q queue · / search
+              </div>
+            </div>
+          </div>
+
+          <div className="row">
+            <div>
+              <div className="k">Credits</div>
+              <div className="d">
+                This web has been made by Ayle (@alyfinnn) By{" "}
+                <a className="credit-link" href="https://discord.gg/aerox" target="_blank" rel="noreferrer">
+                  AeroX
+                </a>
+                .
+              </div>
             </div>
           </div>
         </div>
       </div>
     </>
+  );
+}
+
+/** An accessible on/off switch. */
+function Toggle({ on, onChange, label }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      className={cls("switch", on && "on")}
+      onClick={() => onChange(!on)}
+    >
+      <span className="switch__knob" />
+    </button>
   );
 }
 

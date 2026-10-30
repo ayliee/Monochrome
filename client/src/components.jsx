@@ -5,9 +5,11 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   DiscIcon,
+  DiscordIcon,
   EqualizerIcon,
   ExternalIcon,
   FlameIcon,
+  GithubIcon,
   GridIcon,
   HeartIcon,
   HistoryIcon,
@@ -751,14 +753,11 @@ export function Footer({ onNav, onGenre, status }) {
           </p>
           <div className="footer__social">
             <a href="https://github.com/ayliee/Monochrome" aria-label="GitHub" className="social" target="_blank" rel="noreferrer">
-              <ExternalIcon size={14} />
+              <GithubIcon size={15} />
             </a>
-            <button className="social" aria-label="About Monochrome" onClick={() => onNav("settings")}>
-              <WaveIcon size={14} />
-            </button>
-            <button className="social" aria-label="Queue" onClick={() => onNav("home")}>
-              <QueueIcon size={14} />
-            </button>
+            <a href="https://discord.gg/aerox" aria-label="Discord" className="social" target="_blank" rel="noreferrer">
+              <DiscordIcon size={15} />
+            </a>
           </div>
         </div>
 

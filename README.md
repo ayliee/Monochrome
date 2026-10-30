@@ -78,6 +78,45 @@ header that condenses on scroll, a featured carousel, horizontal rails with
 arrow navigation, a dense release grid, and a persistent bottom player with a
 scrubbable timeline.
 
+### Song detail page
+
+Clicking a song title in any track list (search results, library, recent,
+album, genre) opens a dedicated detail page for that song. It animates in with
+a fade-and-lift, shows the artwork with a play overlay, the artist / album /
+duration chips, a metadata strip (album, duration, source, ISRC), action
+buttons (Play, Shuffle, Save, Queue, More) and the rest of the release when the
+album can be resolved. The **Back** button returns you to wherever you came
+from.
+
+### Settings
+
+The Settings page is fully functional and stores everything on the device
+(`mc-prefs` in `localStorage`):
+
+| Section | Preference | What it does |
+| --- | --- | --- |
+| Appearance | **Theme** | `Lunar Peach` (the warm reference look) or `Monochrome` (every hue removed, pure greyscale) |
+| Appearance | **Accent colour** | Peach, Rose, Sky, Mint, Lilac or Amber — retints buttons, chips, the scrubber and the active lyric |
+| Appearance | **Lyrics text size** | Small / Normal / Large for the synced lyrics |
+| Appearance | **Player size** | Compact / Normal / Large for the bottom bar and its artwork |
+| Appearance | **Reduce motion** | Turns off carousel and page animations |
+| Playback | **Autoplay** | Wraps back to the top of the queue when the last track ends |
+| Playback | **Shuffle when playing** | Reorders the rest of the list around the track you picked |
+| Playback | **Open lyrics automatically** | Brings up the lyrics panel as a track starts |
+| Your data | **Clear my data** | Wipes liked songs and listening history from this browser |
+
+Themes are driven by `data-theme` / `data-accent` / `data-lyric-size` /
+`data-player-size` / `data-motion` on `<html>`; the stylesheet reacts to
+those attributes, so every tint in the app follows the accent.
+
+### Player bar
+
+The bottom bar follows the reference layout: artwork and title on the left
+(the Monochrome pixel mark and "Select a song" when nothing is playing), the
+elapsed / total times and scrubber above the transport controls in the
+middle, and the tools (lyrics, queue, now playing) over the volume and
+recently-played controls on the right.
+
 ### Offline fallback
 
 The client talks to the Node server for everything. If that backend is
