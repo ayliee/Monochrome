@@ -780,7 +780,14 @@ async function handleApi(req, res) {
         if (Array.isArray(arr) && arr.length) payload = arr.find((x) => x.syncedLyrics) || arr[0];
       }
     }
-    if (!payload) return json(res, 404, { error: "No lyrics" });
+    // A lookup that finds nothing is still a successful lookup — answering 200
+    // with an empty payload keeps the browser console clean while the client
+    // shows "no lyrics for this track".
+    if (!payload) {
+      const empty = { missing: true, plainLyrics: null, syncedLyrics: null };
+      lyricsCache.set(key, empty);
+      return json(res, 200, empty);
+    }
     const out = {
       id: payload.id,
       trackName: payload.trackName || payload.name,

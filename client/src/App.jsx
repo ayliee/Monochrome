@@ -24,6 +24,7 @@ import {
   Footer,
   Header,
   Hero,
+  MonochromeMark,
   PageHead,
   PosterCard,
   ReleaseTile,
@@ -43,6 +44,7 @@ import {
   BoltIcon,
   CheckIcon,
   ChevronRightIcon,
+  ClockIcon,
   CloseIcon,
   DiscIcon,
   EqualizerIcon,
@@ -111,6 +113,9 @@ export default function App() {
   const [browse, setBrowse] = useState(null);
   const [collection, setCollection] = useState(null);
   const [collectionLoading, setCollectionLoading] = useState(false);
+  const [trackPage, setTrackPage] = useState(null);
+  const [trackLoading, setTrackLoading] = useState(false);
+  const [trackBack, setTrackBack] = useState("search");
 
   const [queue, setQueue] = useState([]);
   const [index, setIndex] = useState(-1);
@@ -406,6 +411,35 @@ export default function App() {
     }
   };
 
+  /* Open the dedicated detail page for a single song. */
+  const openTrack = async (track, list) => {
+    if (!track) return;
+    setTrackBack(view === "track" ? "search" : view);
+    setTrackPage({ track, list: list || null, album: null, tracks: [] });
+    setTrackLoading(true);
+    setView("track");
+    try {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    } catch {
+      /* ignore */
+    }
+    const albumUrl = track.albumUrl || track.albumUri || track.album?.url;
+    if (albumUrl) {
+      try {
+        const data = await loadCollection(albumUrl);
+        setTrackPage((p) => (p && p.track === track ? { ...p, album: data.info || null, tracks: data.tracks || [] } : p));
+      } catch {
+        /* album context is optional */
+      }
+    }
+    setTrackLoading(false);
+  };
+
+  const closeTrack = () => {
+    setTrackPage(null);
+    setView((v) => (v === "track" ? trackBack || "search" : v));
+  };
+
   const lrc = useMemo(() => parseLrc(lyrics?.syncedLyrics || ""), [lyrics]);
   const lyricIndex = useMemo(() => {
     if (!lrc.length) return -1;
@@ -662,6 +696,7 @@ export default function App() {
             onHeroShuffle={onHeroShuffle}
             onPlayTrack={playTrack}
             onOpen={openCollection}
+            onOpenTrack={openTrack}
             onMore={onContext}
             isLiked={isLiked}
             onLike={toggleLike}
@@ -681,6 +716,7 @@ export default function App() {
               setTab={setSearchTab}
               onPlayTrack={playTrack}
               onOpen={openCollection}
+              onOpenTrack={openTrack}
               onMore={onContext}
               current={current}
               playing={playing}
@@ -709,6 +745,7 @@ export default function App() {
                 onLike={toggleLike}
                 isLiked={isLiked}
                 onMore={onContext}
+                onOpen={openTrack}
               />
             ) : (
               <Empty
@@ -735,6 +772,7 @@ export default function App() {
                 onLike={toggleLike}
                 isLiked={isLiked}
                 onMore={onContext}
+                onOpen={openTrack}
               />
             ) : (
               <Empty
@@ -757,7 +795,26 @@ export default function App() {
               onLike={toggleLike}
               isLiked={isLiked}
               onMore={onContext}
+              onOpen={openTrack}
               onBack={() => setView("search")}
+            />
+          </div>
+        )}
+
+        {view === "track" && trackPage && (
+          <div className="wrap">
+            <TrackPage
+              data={trackPage}
+              loading={trackLoading}
+              current={current}
+              playing={playing}
+              onPlay={playTrack}
+              onLike={toggleLike}
+              isLiked={isLiked}
+              onMore={onContext}
+              onOpen={openTrack}
+              onAddToQueue={addToQueue}
+              onBack={closeTrack}
             />
           </div>
         )}
@@ -780,6 +837,7 @@ export default function App() {
               onLike={toggleLike}
               isLiked={isLiked}
               onMore={onContext}
+              onOpen={openTrack}
               onBack={openBrowse}
             />
           </div>
@@ -796,19 +854,22 @@ export default function App() {
 
       <footer className="player">
         <div className="player__now">
-          {current?.artwork ? (
-            <div className="player__art" onClick={() => setFullscreen(true)} role="button" tabIndex={0}>
+          <div
+            className="player__art"
+            onClick={() => current && setFullscreen(true)}
+            role={current ? "button" : undefined}
+            tabIndex={current ? 0 : undefined}
+          >
+            {current?.artwork ? (
               <Art src={current.artwork} alt="" />
-            </div>
-          ) : (
-            <div className="player__art" onClick={() => current && setFullscreen(true)} role="button" tabIndex={0}>
+            ) : (
               <div className="ph">
-                <MusicNoteIcon size={18} />
+                <MonochromeMark size={20} />
               </div>
-            </div>
-          )}
+            )}
+          </div>
           <div className="player__txt">
-            <div className="player__title">{current?.title || "Nothing playing"}</div>
+            <div className="player__title">{current?.title || "Select a song"}</div>
             <div className="player__artist">{current?.author || "Search to start listening"}</div>
           </div>
           {current && (
@@ -823,6 +884,19 @@ export default function App() {
         </div>
 
         <div className="player__center">
+          <div className="player__scrub">
+            <span className="player__t">{formatTime(currentTime)}</span>
+            <Timeline
+              value={currentTime}
+              max={duration || 0}
+              buffered={buffered}
+              onSeek={(v) => {
+                if (audioRef.current) audioRef.current.currentTime = v;
+                setCurrentTime(v);
+              }}
+            />
+            <span className="player__t total">{formatTime(duration)}</span>
+          </div>
           <div className="ctrl-row">
             <button
               className={cls("icon-btn", shuffle && "on")}
@@ -850,44 +924,33 @@ export default function App() {
               <RepeatIcon size={17} one={repeat === "one"} />
             </button>
           </div>
-          <Timeline
-            value={currentTime}
-            max={duration || 0}
-            buffered={buffered}
-            onSeek={(v) => {
-              if (audioRef.current) audioRef.current.currentTime = v;
-              setCurrentTime(v);
-            }}
-          />
-          <div className="player__times">
-            <span>{formatTime(currentTime)}</span>
-            <span className="total">/ {formatTime(duration)}</span>
-          </div>
         </div>
 
         <div className="player__right">
-          {buffering ? <span className="spinner" style={{ width: 16, height: 16, margin: 0, borderWidth: 2 }} /> : null}
-          <button
-            className={cls("icon-btn", panel === "lyrics" && "on")}
-            onClick={() => setPanel(panel === "lyrics" ? null : "lyrics")}
-            title="Lyrics"
-            aria-label="Lyrics"
-          >
-            <MicIcon size={17} />
-          </button>
-          <button
-            className={cls("icon-btn", panel === "queue" && "on")}
-            onClick={() => setPanel(panel === "queue" ? null : "queue")}
-            title="Queue"
-            aria-label="Queue"
-          >
-            <QueueIcon size={17} />
-          </button>
-          <button className="icon-btn" onClick={() => current && setFullscreen(true)} title="Fullscreen" aria-label="Fullscreen">
-            <ExpandIcon size={17} />
-          </button>
-          <div className="volume">
-            <button className="icon-btn" onClick={() => setMuted((m) => !m)} aria-label="Mute">
+          <div className="player__tools">
+            {buffering ? <span className="spinner" style={{ width: 14, height: 14, margin: 0, borderWidth: 2 }} /> : null}
+            <button
+              className={cls("icon-btn", panel === "lyrics" && "on")}
+              onClick={() => setPanel(panel === "lyrics" ? null : "lyrics")}
+              title="Lyrics"
+              aria-label="Lyrics"
+            >
+              <MicIcon size={17} />
+            </button>
+            <button
+              className={cls("icon-btn", panel === "queue" && "on")}
+              onClick={() => setPanel(panel === "queue" ? null : "queue")}
+              title="Queue"
+              aria-label="Queue"
+            >
+              <QueueIcon size={17} />
+            </button>
+            <button className="icon-btn" onClick={() => current && setFullscreen(true)} title="Now playing" aria-label="Now playing">
+              <ExpandIcon size={17} />
+            </button>
+          </div>
+          <div className="player__extras">
+            <button className="icon-btn" onClick={() => setMuted((m) => !m)} aria-label="Mute" title="Mute">
               <VolumeIcon size={17} level={muted ? 0 : volume} />
             </button>
             <div className="volume__slider">
@@ -904,6 +967,14 @@ export default function App() {
                 aria-label="Volume"
               />
             </div>
+            <button
+              className="icon-btn"
+              onClick={() => setView("recent")}
+              title="Recently played"
+              aria-label="Recently played"
+            >
+              <ClockIcon size={17} />
+            </button>
           </div>
         </div>
       </footer>
@@ -1098,6 +1169,7 @@ function Home({
   onHeroShuffle,
   onPlayTrack,
   onOpen,
+  onOpenTrack,
   onMore,
   isLiked,
   onLike,
@@ -1221,6 +1293,7 @@ function Home({
               onLike={onLike}
               isLiked={isLiked}
               onMore={onMore}
+              onOpen={onOpenTrack}
             />
           </section>
         )}
@@ -1292,6 +1365,7 @@ function SearchPage({
   setTab,
   onPlayTrack,
   onOpen,
+  onOpenTrack,
   onMore,
   current,
   playing,
@@ -1330,6 +1404,7 @@ function SearchPage({
             onLike={onLike}
             isLiked={isLiked}
             onMore={onMore}
+            onOpen={onOpenTrack}
           />
         ) : (
           <Empty icon={<MusicNoteIcon size={34} />} message="No tracks." />
@@ -1424,7 +1499,7 @@ function BrowsePage({ genres, loading, onOpen }) {
 
 /* ------------------------------------------------------------------- genre */
 
-function GenrePage({ data, loading, filter, current, playing, onPlay, onLike, isLiked, onMore, onBack }) {
+function GenrePage({ data, loading, filter, current, playing, onPlay, onLike, isLiked, onMore, onOpen, onBack }) {
   const info = data.info || {};
   const q = String(filter || "").trim().toLowerCase();
   const tracks = (data.tracks || []).filter((t) => {
@@ -1479,6 +1554,7 @@ function GenrePage({ data, loading, filter, current, playing, onPlay, onLike, is
           onLike={onLike}
           isLiked={isLiked}
           onMore={onMore}
+          onOpen={onOpen}
         />
       )}
       {!loading && !tracks.length && (
@@ -1493,7 +1569,7 @@ function GenrePage({ data, loading, filter, current, playing, onPlay, onLike, is
 
 /* -------------------------------------------------------------- collection */
 
-function CollectionPage({ data, loading, current, playing, onPlay, onLike, isLiked, onMore, onBack }) {
+function CollectionPage({ data, loading, current, playing, onPlay, onLike, isLiked, onMore, onOpen, onBack }) {
   const info = data.info || {};
   const tracks = data.tracks || [];
   const total = info.totalTracks || tracks.length;
@@ -1546,12 +1622,137 @@ function CollectionPage({ data, loading, current, playing, onPlay, onLike, isLik
           onLike={onLike}
           isLiked={isLiked}
           onMore={onMore}
+          onOpen={onOpen}
         />
       )}
       {!loading && !tracks.length && (
         <Empty icon={<MusicNoteIcon size={34} />} message="No tracks in this collection." />
       )}
     </>
+  );
+}
+
+/* ------------------------------------------------------------- track page */
+
+function TrackPage({
+  data,
+  loading,
+  current,
+  playing,
+  onPlay,
+  onLike,
+  isLiked,
+  onMore,
+  onOpen,
+  onBack,
+  onAddToQueue,
+}) {
+  const track = data?.track;
+  if (!track) return null;
+
+  const albumTracks = (data.tracks || []).filter((t) => t && trackKey(t) !== trackKey(track));
+  const isCurrent = !!current && trackKey(current) === trackKey(track);
+  const duration = track.duration ? formatTime(track.duration, true) : "—";
+  const source = (track.source || "").toLowerCase();
+  const sourceLabel =
+    source === "youtube" ? "YouTube" : source === "spotify" ? "Spotify" : source ? source[0].toUpperCase() + source.slice(1) : "Unknown";
+
+  const facts = [
+    ["Album", track.album || "—"],
+    ["Duration", duration],
+    ["Source", sourceLabel],
+    ["ISRC", track.isrc || "—"],
+  ];
+
+  return (
+    <div className="track-page">
+      <div className="detail-hero detail-hero--track">
+        <div className="detail-hero__bg">
+          {track.artwork ? <img src={coverUrl(track.artwork)} alt="" /> : null}
+        </div>
+        <div className="detail-grid">
+          <div className="detail-poster track-page__poster">
+            {track.artwork ? <Art src={track.artwork} alt={track.title} /> : <div className="ph" style={{ width: "100%", height: "100%" }} />}
+            <button
+              className="track-page__play"
+              onClick={() => onPlay(track, data.list || [track])}
+              aria-label={isCurrent && playing ? "Pause" : "Play"}
+            >
+              {isCurrent && playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
+            </button>
+          </div>
+          <div>
+            <button className="section__link" onClick={onBack} style={{ marginBottom: 10 }}>
+              <BackIcon size={13} /> Back
+            </button>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>
+              {isCurrent && playing ? "Now playing" : "Song"}
+            </div>
+            <h1 className="detail-title track-page__title">{track.title}</h1>
+            <div className="detail-facts">
+              {track.author ? <span className="chip chip--brand">{track.author}</span> : null}
+              {track.album ? <span className="chip">{track.album}</span> : null}
+              <span className="chip">
+                <ClockIcon size={12} /> {duration}
+              </span>
+            </div>
+            <p className="detail-synopsis">
+              {track.author ? `${track.author} · ` : ""}
+              {track.album ? `${track.album} · ` : ""}
+              Streamed in full quality with live synced lyrics — tap play and the words follow along
+              line by line.
+            </p>
+            <div className="detail-actions">
+              <button className="btn btn--primary" onClick={() => onPlay(track, data.list || [track])}>
+                {isCurrent && playing ? <PauseIcon size={16} /> : <PlayIcon size={16} />}
+                {isCurrent && playing ? "Pause" : "Play"}
+              </button>
+              <button className="btn btn--ghost" onClick={() => onPlay(track, shuffleCopy(data.list?.length ? data.list : [track]))}>
+                <ShuffleIcon size={16} /> Shuffle
+              </button>
+              <button className="btn btn--ghost" onClick={() => onLike(track)}>
+                <HeartIcon filled={isLiked(track)} size={16} /> {isLiked(track) ? "Saved" : "Save"}
+              </button>
+              <button className="btn btn--ghost" onClick={() => onAddToQueue?.(track)}>
+                <QueueIcon size={16} /> Queue
+              </button>
+              <button
+                className="btn btn--ghost"
+                onClick={(e) => onMore?.(track, e.clientX, e.clientY, data.list || [track])}
+              >
+                <MoreIcon size={16} /> More
+              </button>
+            </div>
+            <dl className="track-page__facts">
+              {facts.map(([k, v]) => (
+                <div key={k}>
+                  <dt>{k}</dt>
+                  <dd>{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      {loading && <Empty icon={<EqualizerIcon size={34} />} message="Loading album…" />}
+
+      {!!albumTracks.length && (
+        <section className="section">
+          <SectionHead title={data.album?.name || track.album || "From the album"} subtitle="More from this release" icon={<DiscIcon size={16} />} />
+          <TrackList
+            tracks={albumTracks}
+            current={current}
+            playing={playing}
+            onPlay={onPlay}
+            onLike={onLike}
+            isLiked={isLiked}
+            onMore={onMore}
+            onOpen={onOpen}
+          />
+        </section>
+      )}
+    </div>
   );
 }
 

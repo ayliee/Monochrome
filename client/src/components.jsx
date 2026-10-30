@@ -68,7 +68,27 @@ export function Art({ src, alt = "", className, onClick, round }) {
   );
 }
 
-/* ------------------------------------------------------------------- brand */
+/* ------------------------------------------------------------------ brand */
+
+/** The Monochrome pixel mark — used in the header and the player's idle slot. */
+export function MonochromeMark({ size = 24, className }) {
+  return (
+    <svg
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 8 8"
+      fill="none"
+      shapeRendering="crispEdges"
+      aria-hidden="true"
+    >
+      <rect x="3" y="0.6" width="4" height="2" fill="currentColor" />
+      <rect x="4.6" y="2.6" width="2" height="2" fill="currentColor" />
+      <rect x="1" y="2.6" width="2" height="2" fill="currentColor" />
+      <rect x="1" y="4.6" width="4" height="2" fill="currentColor" />
+    </svg>
+  );
+}
 
 export function Brand({ footer, onClick }) {
   return (
@@ -578,6 +598,7 @@ export function TrackRow({
   onPlay,
   onLike,
   onMore,
+  onOpen,
   list,
   showAlbum = true,
 }) {
@@ -595,7 +616,17 @@ export function TrackRow({
         <Art src={track.artwork} alt="" />
       </div>
       <div className="track-row__body">
-        <div className="track-row__title">{track.title}</div>
+        {onOpen ? (
+          <button
+            className="track-row__title track-row__title--link"
+            onClick={() => onOpen(track, list)}
+            title={`Open ${track.title}`}
+          >
+            {track.title}
+          </button>
+        ) : (
+          <div className="track-row__title">{track.title}</div>
+        )}
         <div className="track-row__meta">{track.author}</div>
       </div>
       {showAlbum && track.album ? <div className="track-row__album">{track.album}</div> : null}
@@ -629,6 +660,7 @@ export function TrackList({
   onLike,
   isLiked,
   onMore,
+  onOpen,
   limit,
 }) {
   const show = limit ? tracks.slice(0, limit) : tracks;
@@ -647,6 +679,7 @@ export function TrackList({
           onPlay={onPlay}
           onLike={onLike}
           onMore={onMore}
+          onOpen={onOpen}
         />
       ))}
     </div>

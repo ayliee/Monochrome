@@ -141,7 +141,11 @@ export async function fetchLyrics(track) {
     const res = await fetch(`${API_BASE}/api/lyrics?${p}`);
     if (res.status === 404) return null;
     if (!res.ok) throw new Error("lyrics");
-    return await res.json();
+    const data = await res.json();
+    // The server answers 200 with `{ missing: true }` when LRCLIB has no
+    // entry — treat that the same as a 404.
+    if (!data || data.missing) return null;
+    return data;
   } catch {
     markOffline();
     return demo.demoLyrics(track.title, track.author);

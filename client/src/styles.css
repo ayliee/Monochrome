@@ -82,7 +82,7 @@ body {
   text-rendering: optimizeLegibility;
   overflow-x: hidden;
   min-height: 100vh;
-  padding-bottom: var(--player-h);
+  padding-bottom: calc(var(--player-h) + 28px);
 }
 
 /* a single warm wash, like the reference's peach glow behind the hero */
@@ -1100,6 +1100,82 @@ select.input {
   cursor: pointer;
 }
 
+/* -------------------------------------------------------------- track page */
+/* The per-song detail view. It fades and lifts in as a "page" so opening a
+   song from the search results feels like navigating somewhere, not like a
+   modal popping over the list. */
+.track-page {
+  animation: trackPageIn 0.44s var(--ease-out) both;
+}
+@keyframes trackPageIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.992); }
+  to { opacity: 1; transform: none; }
+}
+.detail-hero--track { padding-top: 30px; }
+.track-page__poster {
+  position: relative;
+  box-shadow: var(--shadow-xl);
+  animation: trackArtIn 0.55s var(--ease-out) both 0.05s;
+}
+@keyframes trackArtIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.94) rotate(-1.5deg); }
+  to { opacity: 1; transform: none; }
+}
+.track-page__play {
+  position: absolute;
+  right: 10px; bottom: 10px;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--brand);
+  color: #171717;
+  border: none;
+  box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.85);
+  transition: 0.18s var(--ease);
+}
+.track-page__play:hover { transform: scale(1.08); }
+.track-page__title { overflow-wrap: anywhere; }
+.track-page__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.track-page__facts dt {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 3px;
+}
+.track-page__facts dd {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--fg-dim);
+  overflow-wrap: anywhere;
+}
+
+/* Track titles in lists open the detail page. */
+.track-row__title--link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track-row__title--link:hover { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
+.track-row__title--link:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 3px; }
+
 /* -------------------------------------------------------------- browse page */
 .page-head { padding: 24px 0 8px; }
 .page-title { font-size: clamp(22px, 2.8vw, 32px); letter-spacing: -0.03em; }
@@ -1250,8 +1326,8 @@ select.input {
 /* ------------------------------------------------------------------ toasts */
 .toasts {
   position: fixed;
-  right: 14px;
-  bottom: calc(var(--player-h) + 18px);
+  right: 18px;
+  bottom: calc(var(--player-h) + 28px);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1296,55 +1372,76 @@ select.input {
    the fullscreen lyrics overlay. */
 .player {
   position: fixed;
-  left: 0; right: 0; bottom: 0;
+  left: 14px; right: 14px; bottom: 12px;
   z-index: 115;
   height: var(--player-h);
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(0, 2.2fr) minmax(180px, 1fr);
+  grid-template-columns: minmax(190px, 1fr) minmax(0, 2.6fr) minmax(190px, 1fr);
   align-items: center;
-  gap: 14px;
-  padding: 0 var(--page-x);
-  background: rgba(16, 16, 16, 0.82);
-  border-top: 1px solid var(--line-strong);
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-  box-shadow: 0 -18px 44px -26px rgba(0, 0, 0, 0.95);
+  gap: 18px;
+  padding: 0 16px;
+  background: rgba(19, 19, 19, 0.94);
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: 0 22px 52px -26px rgba(0, 0, 0, 0.95);
 }
-.player__now { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.player__now { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .player__art {
-  width: 46px; height: 46px;
-  border-radius: 9px;
+  width: 48px; height: 48px;
+  border-radius: 10px;
   overflow: hidden;
   flex: none;
   background: var(--muted-bg);
   cursor: pointer;
   position: relative;
+  border: 1px solid var(--line);
 }
 .player__art img { width: 100%; height: 100%; object-fit: cover; }
-.player__art .ph { width: 100%; height: 100%; display: grid; place-items: center; color: var(--faint); }
-.player__art .ph svg { width: 18px; height: 18px; }
+.player__art .ph { width: 100%; height: 100%; display: grid; place-items: center; color: var(--brand); background: #0b0b0b; }
+.player__art .ph svg { width: 20px; height: 20px; }
 .player__txt { min-width: 0; }
 .player__title {
-  font-size: 13px; font-weight: 500;
+  font-size: 13.5px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .player__artist {
   font-size: 11.5px; color: var(--muted-fg);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.player__now .icon-btn { flex: none; }
 
-.player__center { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
-.ctrl-row { display: flex; align-items: center; gap: 2px; color: #fff; }
+/* centre column — scrubber above the transport, exactly like the reference */
+.player__center { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; width: 100%; }
+.player__scrub {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 560px;
+}
+.player__t {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.62);
+  font-variant-numeric: tabular-nums;
+  min-width: 30px;
+  text-align: center;
+}
+.player__t.total { color: rgba(255, 255, 255, 0.38); }
+
+.ctrl-row { display: flex; align-items: center; gap: 4px; color: #fff; }
 .ctrl-row .icon-btn { color: rgba(255, 255, 255, 0.72); }
 .ctrl-row .icon-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
 .ctrl-row .icon-btn.on { color: var(--brand); background: rgba(255, 224, 191, 0.12); border-color: transparent; }
 .play-main {
-  width: 36px; height: 36px;
+  width: 38px; height: 38px;
   border-radius: 50%;
   display: grid; place-items: center;
   background: var(--fg);
   color: #111;
-  margin: 0 4px;
+  margin: 0 6px;
   transition: 0.18s var(--ease);
 }
 .play-main:hover { transform: scale(1.06); background: #fff; }
@@ -1398,31 +1495,29 @@ select.input {
 }
 .timeline:hover .timeline__tooltip { opacity: 1; }
 
-.player__times {
+/* right column — tools over the volume cluster */
+.player__right {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   justify-content: center;
   gap: 6px;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.62);
-  font-variant-numeric: tabular-nums;
+  min-width: 0;
 }
-.player__times .total { color: rgba(255, 255, 255, 0.38); }
-
-.player__right { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.player__tools { display: flex; align-items: center; gap: 4px; }
+.player__extras { display: flex; align-items: center; gap: 8px; }
 .player__right .icon-btn { color: rgba(255, 255, 255, 0.72); }
 .player__right .icon-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
 .player__right .icon-btn.on { color: var(--brand); background: rgba(255, 224, 191, 0.12); border-color: transparent; }
 
-.volume { display: flex; align-items: center; gap: 0; }
 .volume__slider {
-  width: 0; overflow: hidden;
+  width: 78px;
+  overflow: hidden;
   transition: width 0.22s var(--ease), margin 0.22s;
   display: flex; align-items: center;
 }
-.volume:hover .volume__slider, .volume__slider:focus-within { width: 72px; margin-right: 6px; }
 .volume__slider input {
-  width: 72px; appearance: none; height: 3px; border-radius: 3px;
+  width: 78px; appearance: none; height: 3px; border-radius: 3px;
   background: rgba(255, 255, 255, 0.25); outline: none; cursor: pointer;
 }
 .volume__slider input::-webkit-slider-thumb {
@@ -1521,8 +1616,8 @@ select.input {
 }
 .lyrics-album { color: var(--faint); }
 
-.lyrics-progress { margin-top: 2px; }
-.lyrics-progress .timeline { max-width: 100%; }
+.lyrics-progress { margin-top: 4px; max-width: 320px; }
+.lyrics-progress .timeline { max-width: 300px; }
 .lyrics-times {
   display: flex;
   gap: 6px;
@@ -1589,7 +1684,7 @@ select.input {
   display: flex;
   flex-direction: column;
   animation: slideIn 0.26s var(--ease-out);
-  padding-bottom: var(--player-h);
+  padding-bottom: calc(var(--player-h) + 26px);
 }@keyframes slideIn { from { transform: translateX(24px); opacity: 0; } }
 .drawer header {
   display: flex;
@@ -1821,30 +1916,51 @@ select.input {
   .search.is-open .search__panel { width: 100%; left: 0; right: 0; }
   .footer { padding-bottom: 40px; }
   .track-row__album { display: none; }
-  /* Mobile player: artwork + actions on the first row, transport centred on
-     the second. The scrubber sits flush with the top edge of the bar. */
+  /* Mobile player: the reference layout collapses to two rows — track + tools
+     on top, transport underneath — with the scrubber pinned to the very top
+     edge of the bar as a slim progress strip. */
   .player {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto;
-    gap: 8px 10px;
+    gap: 6px 10px;
     height: var(--player-h);
-    padding: 10px var(--page-x) 12px;
+    padding: 12px 13px 12px;
     align-content: center;
+    border-radius: 14px;
+    left: 8px; right: 8px; bottom: 8px;
   }
-  .player__now { grid-row: 1; grid-column: 1; }
-  .player__right { grid-row: 1; grid-column: 2; }
+  .player__now { grid-row: 1; grid-column: 1; gap: 10px; }
+  .player__art { width: 40px; height: 40px; border-radius: 8px; }
+  .player__art .ph svg { width: 17px; height: 17px; }
+  .player__title { font-size: 12.5px; }
+  .player__artist { font-size: 11px; }
+  .player__right {
+    grid-row: 1; grid-column: 2;
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+  }
+  .player__right .icon-btn { width: 30px; height: 30px; }
+  .player__right .icon-btn svg { width: 16px; height: 16px; }
+  .player__right .player__extras { gap: 2px; }
+  .player__extras .volume__slider { display: none; }
   .player__center {
     grid-row: 2;
     grid-column: 1 / -1;
+    position: relative;
     flex-direction: row;
     align-items: center;
     justify-content: center;
     width: 100%;
   }
-  .player__times { display: none; }
-  .player__center .timeline {
+  .player__scrub {
     position: absolute;
-    top: 0; left: 0; right: 0;
+    top: -6px; left: -13px; right: -13px;
+    display: block;
+    max-width: none;
+  }
+  .player__scrub .player__t { display: none; }
+  .player__center .timeline {
     width: 100%;
     max-width: none;
     height: 4px;
@@ -1855,6 +1971,7 @@ select.input {
   .player__center .timeline__tooltip { display: none; }
   .ctrl-row { justify-content: center; gap: 4px; }
   .ctrl-row .icon-btn { width: 36px; height: 36px; }
+  .play-main { width: 34px; height: 34px; margin: 0 4px; }
 
   /* Lyrics panel stacks on small screens: track details on top, words below. */
   .lyrics-panel {
@@ -1898,6 +2015,8 @@ select.input {
   .footer__cols { grid-template-columns: minmax(0, 1fr); }
   .search-strip__filter { display: none; }
   .track-row__dur { display: none; }
+  /* reclaim horizontal room on the narrowest screens */
+  .player__extras > .icon-btn:last-child { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
