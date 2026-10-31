@@ -3,6 +3,7 @@ import { coverUrl, formatTime } from "./api.js";
 import {
   BoltIcon,
   ChevronLeftIcon,
+  CloseIcon,
   ChevronRightIcon,
   DiscIcon,
   DiscordIcon,
@@ -141,6 +142,28 @@ export function Header({
     return () => document.body.classList.remove("nav-open");
   }, [menuOpen]);
 
+  // On small screens the nav drops over the page, so close it when the user
+  // scrolls, presses Escape, or taps anywhere outside of it.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onScroll = () => setMenuOpen(false);
+    const onKey = (e) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    const onDown = (e) => {
+      if (e.target.closest("#nav") || e.target.closest("#menu-btn")) return;
+      setMenuOpen(false);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [menuOpen]);
+
   const items = [
     { id: "home", label: "Home" },
     { id: "browse", label: "Browse" },
@@ -179,6 +202,7 @@ export function Header({
               e.preventDefault();
               onSubmit();
             }}
+            onClick={() => setSearchOpen(true)}
           >
             <SearchIcon size={15} className="search__icon" />
             <input
@@ -194,6 +218,18 @@ export function Header({
               onFocus={() => setSearchOpen(true)}
             />
             <kbd className="search__kbd">/</kbd>
+            <button
+              type="button"
+              className="search__close icon-btn"
+              aria-label="Close search"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSearchOpen(false);
+                e.currentTarget.closest("form")?.querySelector("input")?.blur();
+              }}
+            >
+              <CloseIcon size={15} />
+            </button>
             <div className="search__panel" id="search-panel" hidden={!searchOpen || !query.trim()}>
               <SearchPanel query={query} suggestions={suggestions} searching={searching} onPick={onSubmit} />
             </div>

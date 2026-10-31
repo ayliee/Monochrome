@@ -4,8 +4,6 @@ import {
   coverUrl,
   fetchLyrics,
   formatTime,
-  hasProbed,
-  isOnline,
   loadCollection,
   loadGenre,
   loadGenreMeta,
@@ -387,6 +385,17 @@ export default function App() {
     }
     setPlaying(false);
   };
+
+  // When the search opens (magnifier tap, "/" key) the field has to take
+  // focus — on phones the input is hidden until the search is open, so
+  // without this the tap looks like it did nothing.
+  useEffect(() => {
+    if (!searchOpen) return;
+    const el = searchRef.current;
+    if (!el) return;
+    const t = setTimeout(() => el.focus({ preventScroll: true }), 20);
+    return () => clearTimeout(t);
+  }, [searchOpen]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -884,8 +893,6 @@ export default function App() {
             <Settings
               prefs={prefs}
               setPrefs={setPrefs}
-              online={isOnline()}
-              probed={hasProbed()}
               onClearData={clearData}
             />
           </div>
@@ -1800,7 +1807,7 @@ function TrackPage({
 
 /* ---------------------------------------------------------------- settings */
 
-function Settings({ prefs, setPrefs, online, probed, onClearData }) {
+function Settings({ prefs, setPrefs, onClearData }) {
   const set = (patch) => setPrefs((p) => ({ ...p, ...patch }));
 
   return (
@@ -1933,56 +1940,6 @@ function Settings({ prefs, setPrefs, online, probed, onClearData }) {
             </button>
           </div>
 
-          <div className="row">
-            <div>
-              <div className="k">Streaming</div>
-              <div className="d">
-                Full tracks are resolved server-side. Lavalink credentials never leave the server.
-              </div>
-            </div>
-          </div>
-
-          <div className="row">
-            <div>
-              <div className="k">Backend</div>
-              <div className="d">
-                {probed
-                  ? online
-                    ? "Connected to the catalogue — searching and streaming are live."
-                    : "Backend unreachable — the offline catalogue is being served instead."
-                  : "Checking the catalogue…"}
-              </div>
-            </div>
-          </div>
-
-          <div className="row">
-            <div>
-              <div className="k">Lyrics</div>
-              <div className="d">Live synced lyrics provided by LRCLIB.</div>
-            </div>
-          </div>
-
-          <div className="row">
-            <div>
-              <div className="k">Shortcuts</div>
-              <div className="d">
-                Space play/pause · ←/→ seek · Shift+←/→ skip · S shuffle · R repeat · L lyrics · Q queue · / search
-              </div>
-            </div>
-          </div>
-
-          <div className="row">
-            <div>
-              <div className="k">Credits</div>
-              <div className="d">
-                This web has been made by Ayle (@alyfinnn) By{" "}
-                <a className="credit-link" href="https://discord.gg/aerox" target="_blank" rel="noreferrer">
-                  AeroX
-                </a>
-                .
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </>
