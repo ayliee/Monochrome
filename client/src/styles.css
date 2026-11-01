@@ -68,6 +68,11 @@
   --player-h-eff: calc(var(--player-h) * var(--player-scale));
   /* Lyrics type scale — driven by the "lyrics size" preference. */
   --lyric-scale: 1;
+  /* Edge blend: a horizontal and a vertical falloff, intersected. Used by
+     the detail hero so its artwork wash fades out instead of being cut. */
+  --edge-blend:
+    linear-gradient(90deg, transparent 0, #000 12%, #000 88%, transparent 100%),
+    linear-gradient(180deg, transparent 0, #000 11%, #000 100%);
   --max: 1600px;
   --page-x: clamp(16px, 3vw, 40px);
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
@@ -1124,24 +1129,38 @@ main:focus { outline: none; }
 .sk-card__line.short { width: 55%; }
 
 /* ------------------------------------------------------------ detail page */
+/* The album wash is atmosphere, never a panel. Both the artwork and the
+   scrim that sits over it are masked so they dissolve on every side — a
+   hard cut at the container edge reads as a black rectangle on the page. */
 .detail-hero {
   position: relative;
   padding: 26px 0 22px;
-  overflow: hidden;
+  overflow: visible;
 }
-.detail-hero__bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+.detail-hero__bg {
+  position: absolute; inset: 0; z-index: 0;
+  overflow: hidden;
+  -webkit-mask-image: var(--edge-blend);
+  mask-image: var(--edge-blend);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
 .detail-hero__bg img {
   width: 100%; height: 100%;
   object-fit: cover;
   filter: blur(60px) saturate(120%);
-  transform: scale(1.25);
+  transform: scale(1.45);
   opacity: 0.28;
 }
 .detail-hero::before {
   content: "";
   position: absolute; inset: 0; z-index: 1;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(17, 17, 17, 0.7), rgba(17, 17, 17, 0.94) 62%, var(--background) 100%);
+  background: linear-gradient(180deg, rgba(17, 17, 17, 0.66), rgba(17, 17, 17, 0.94) 62%, var(--background) 100%);
+  -webkit-mask-image: var(--edge-blend);
+  mask-image: var(--edge-blend);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
 }
 .detail-hero > *:not(.detail-hero__bg) { position: relative; z-index: 2; }
 .detail-grid {
@@ -1354,8 +1373,8 @@ select.input {
 .footer {
   position: relative;
   margin-top: 48px;
-  border-top: 1px solid var(--line);
-  background: #0d0d0d;
+  /* The band eases up out of the page rather than starting on a hard line. */
+  background: linear-gradient(180deg, rgba(13, 13, 13, 0) 0, #0d0d0d 150px);
   overflow: hidden;
   padding-bottom: 34px;
 }
@@ -2094,9 +2113,9 @@ select.input {
   .player {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto;
-    gap: 6px 10px;
+    gap: 8px 10px;
     height: var(--player-h-eff);
-    padding: 12px 13px 12px;
+    padding: 11px 13px 11px;
     align-content: center;
     border-radius: 14px;
     left: 0; right: 0; bottom: 8px;
@@ -2126,16 +2145,23 @@ select.input {
   .player__center {
     grid-row: 2;
     grid-column: 1 / -1;
-    position: static;
+    position: relative;
     flex-direction: row;
     align-items: center;
     justify-content: flex-start;
     width: 100%;
     padding-left: calc(40px * var(--player-scale) + 10px);
   }
+  /* The scrubber rides directly above the transport row, so the progress
+     line is the thing immediately above the play button. */
   .player__scrub {
     position: absolute;
-    top: 0; left: 0; right: 0;
+    bottom: calc(100% + 2px);
+    left: calc(40px * var(--player-scale) + 10px);
+    right: 0;
+    /* width:auto — the base rule sets width:100%, which would beat `right`
+       and push the strip past the edge of the screen. */
+    width: auto;
     display: block;
     max-width: none;
   }
@@ -2197,6 +2223,26 @@ select.input {
   .track-row__dur { display: none; }
   /* reclaim horizontal room on the narrowest screens */
   .player__extras > .icon-btn:last-child { display: none; }
+
+  /* Settings rows stack: the description keeps the full width and the
+     control drops underneath, instead of the two fighting for a 360px row. */
+  .settings .row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .settings .row .pill,
+  .settings .row .swatches,
+  .settings .row .switch,
+  .settings .row .btn { align-self: flex-start; }
+  .settings .row .d { max-width: none; }
+
+  /* Detail actions wrap into even rows on a phone. */
+  .detail-actions { gap: 7px; }
+  .detail-actions .btn { padding: 0 13px; }
+
+  /* The metadata strip drops to a single column on the smallest phones. */
+  .track-page__facts { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
 }
 
 @media (prefers-reduced-motion: reduce) {
