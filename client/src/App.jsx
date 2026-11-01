@@ -28,7 +28,6 @@ import {
   PosterCard,
   ReleaseTile,
   Row,
-  SearchStrip,
   SectionHead,
   SkeletonRow,
   SourceNote,
@@ -623,6 +622,13 @@ export default function App() {
     setPanel(null);
   };
 
+  // Opens the header search field (and focuses it) — the only search
+  // entry point now that the home page strip is gone.
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+    searchRef.current?.focus();
+  }, []);
+
   const runSearch = () => {
     if (!query.trim()) return;
     setView("search");
@@ -739,6 +745,7 @@ export default function App() {
             onGoRecent={() => setView("recent")}
             onHeroPlay={onHeroPlay}
             onHeroShuffle={onHeroShuffle}
+            onOpenSearch={openSearch}
             onPlayTrack={playTrack}
             onOpen={openCollection}
             onOpenTrack={openTrack}
@@ -752,7 +759,7 @@ export default function App() {
         )}
 
         {view === "search" && (
-          <div className="wrap">
+          <div className="wrap page-enter">
             <SearchPage
               query={query}
               searching={searching}
@@ -772,7 +779,7 @@ export default function App() {
         )}
 
         {view === "library" && (
-          <div className="wrap">
+          <div className="wrap page-enter">
             <PageHead
               title="Library"
               sub={
@@ -803,7 +810,7 @@ export default function App() {
         )}
 
         {view === "recent" && (
-          <div className="wrap">
+          <div className="wrap page-enter">
             <PageHead
               title="Recently played"
               sub={recent.length ? `${recent.length} track${recent.length === 1 ? "" : "s"} in your history.` : undefined}
@@ -830,7 +837,7 @@ export default function App() {
         )}
 
         {view === "collection" && collection && (
-          <div className="wrap">
+          <div className="wrap page-enter">
             <CollectionPage
               data={collection}
               loading={collectionLoading}
@@ -847,7 +854,7 @@ export default function App() {
         )}
 
         {view === "track" && trackPage && (
-          <div className="wrap">
+          <div className="wrap page-enter">
             <TrackPage
               data={trackPage}
               loading={trackLoading}
@@ -865,13 +872,13 @@ export default function App() {
         )}
 
         {view === "browse" && (
-          <div className="wrap">
+          <div className="wrap page-enter">
             <BrowsePage genres={genres} loading={genresLoading} onOpen={openGenre} />
           </div>
         )}
 
         {view === "genre" && genrePage && (
-          <div className="wrap">
+          <div className="wrap page-enter">
             <GenrePage
               data={genrePage}
               loading={genreLoading}
@@ -889,7 +896,7 @@ export default function App() {
         )}
 
         {view === "settings" && (
-          <div className="wrap">
+          <div className="wrap page-enter">
             <Settings
               prefs={prefs}
               setPrefs={setPrefs}
@@ -1216,6 +1223,7 @@ function Home({
   onGoRecent,
   onHeroPlay,
   onHeroShuffle,
+  onOpenSearch,
   onPlayTrack,
   onOpen,
   onOpenTrack,
@@ -1242,6 +1250,7 @@ function Home({
 
   return (
     <>
+      <div className="page-enter">
       <div className="wrap">
         <Hero
           items={heroItems}
@@ -1250,8 +1259,6 @@ function Home({
           onShuffle={onHeroShuffle}
         />
       </div>
-
-      <SearchStrip value={query} onChange={onQuery} onSubmit={onSearch} onBrowse={onBrowse} />
 
       <div className="wrap">
         {!online && (
@@ -1309,7 +1316,7 @@ function Home({
             subtitle="The most-played right now"
             icon={<FlameIcon size={16} />}
             cta="Search"
-            onCta={onSearch}
+            onCta={onOpenSearch}
           >
             {songs.slice(0, 14).map((t, i) => (
               <PosterCard
@@ -1399,6 +1406,7 @@ function Home({
             </div>
           </section>
         )}
+      </div>
       </div>
     </>
   );

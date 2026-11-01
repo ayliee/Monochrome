@@ -729,64 +729,6 @@ main:focus { outline: none; }
 .hero__swipe-hint svg { width: 12px; height: 12px; opacity: 0.7; }
 
 /* home search strip */
-.search-strip {
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  margin-top: 18px;
-  background: rgba(255, 255, 255, 0.012);
-}
-.search-strip__inner {
-  max-width: var(--max);
-  margin: 0 auto;
-  padding: 14px var(--page-x);
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-.search-strip__field {
-  position: relative;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-.search-strip__field svg {
-  position: absolute;
-  left: 13px;
-  width: 15px;
-  height: 15px;
-  color: var(--faint);
-}
-.search-strip input {
-  width: 100%;
-  height: 42px;
-  padding: 0 14px 0 36px;
-  border-radius: var(--r-lg);
-  background: var(--surface-soft);
-  border: 1px solid var(--line);
-  font-size: 13.5px;
-  outline: none;
-  transition: 0.2s var(--ease);
-}
-.search-strip input::placeholder { color: var(--faint); }
-.search-strip input:focus { border-color: rgba(var(--brand-rgb), 0.4); background: var(--surface-soft-2); }
-.search-strip__filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 42px;
-  padding: 0 14px;
-  border-radius: var(--r-lg);
-  border: 1px solid var(--line);
-  background: var(--surface-soft);
-  font-size: 12.5px;
-  color: var(--muted-fg);
-  white-space: nowrap;
-  transition: 0.2s var(--ease);
-  cursor: pointer;
-}
-.search-strip__filter:hover { color: var(--fg); border-color: var(--line-strong); }
-
 /* --------------------------------------------------------------------- rails */
 .row-wrap { position: relative; }
 
@@ -1230,10 +1172,13 @@ select.input {
 /* The per-song detail view. It fades and lifts in as a "page" so opening a
    song from the search results feels like navigating somewhere, not like a
    modal popping over the list. */
-.track-page {
-  animation: trackPageIn 0.44s var(--ease-out) both;
+/* Every view arrives the same way — a short fade-and-lift, so moving
+   between pages reads as turning a page rather than a hard cut. */
+.page-enter {
+  animation: pageEnter 0.44s var(--ease-out) both;
+  will-change: opacity, transform;
 }
-@keyframes trackPageIn {
+@keyframes pageEnter {
   from { opacity: 0; transform: translateY(18px) scale(0.992); }
   to { opacity: 1; transform: none; }
 }
@@ -2157,7 +2102,9 @@ select.input {
   .player__scrub {
     position: absolute;
     bottom: calc(100% + 2px);
-    left: calc(40px * var(--player-scale) + 10px);
+    /* left:0 anchors it to the row's edge, so the line starts directly
+       under the artwork and runs to the end of the bar. */
+    left: 0;
     right: 0;
     /* width:auto — the base rule sets width:100%, which would beat `right`
        and push the strip past the edge of the screen. */
@@ -2219,7 +2166,6 @@ select.input {
   .card__title { font-size: 12px; }
   .section__title { font-size: 15px; }
   .footer__cols { grid-template-columns: minmax(0, 1fr); }
-  .search-strip__filter { display: none; }
   .track-row__dur { display: none; }
   /* reclaim horizontal room on the narrowest screens */
   .player__extras > .icon-btn:last-child { display: none; }

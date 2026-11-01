@@ -425,39 +425,6 @@ export function Hero({ items, onOpen, onPlay, onShuffle }) {
 
 /* ------------------------------------------------------------- search strip */
 
-export function SearchStrip({ value, onChange, onSubmit, onBrowse }) {
-  return (
-    <div className="search-strip">
-      <div className="search-strip__inner">
-        <form
-          className="search-strip__field"
-          onSubmit={(e) => {
-            e.preventDefault();
-            onSubmit();
-          }}
-          role="search"
-        >
-          <SearchIcon size={15} />
-          <input
-            type="search"
-            name="q"
-            placeholder="Search songs, albums, artists…"
-            aria-label="Search songs"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-          />
-        </form>
-        <button className="search-strip__filter" onClick={onBrowse}>
-          <GridIcon size={14} /> Browse genres
-        </button>
-        <button className="search-strip__filter" onClick={onSubmit}>
-          <ListIcon size={14} /> Search
-        </button>
-      </div>
-    </div>
-  );
-}
-
 /* -------------------------------------------------------------------- rails */
 
 export function Row({ title, subtitle, icon, cta, onCta, children }) {
